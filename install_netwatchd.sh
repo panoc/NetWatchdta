@@ -36,7 +36,7 @@ KEEP_CONFIG=0
 if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
     echo "⚠️ Existing installation found."
     printf "Do you want to (c)lean install or (k)eep existing settings? [c/k]: "
-    read choice
+    read choice </dev/tty
     case "$choice" in
         k|K ) KEEP_CONFIG=1 ;;
         * ) 
@@ -53,9 +53,9 @@ mkdir -p "$INSTALL_DIR"
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo "---"
     printf "🔗 Enter Discord Webhook URL: "
-    read user_webhook
+    read user_webhook </dev/tty
     printf "👤 Enter Discord User ID (for @mentions): "
-    read user_id
+    read user_id </dev/tty
     
     echo "🧪 Sending test notification to Discord..."
     TEST_PAYLOAD="{\"content\": \"📟 **Router Setup**: Connectivity test successful! <@$user_id>\"}"
@@ -63,7 +63,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     
     echo "---"
     printf "❓ Did you receive the Discord notification? [y/n]: "
-    read confirm_test
+    read confirm_test </dev/tty
     
     if [ "$confirm_test" != "y" ] && [ "$confirm_test" != "Y" ]; then
         echo "❌ Installation Aborted. Please check your Webhook URL and try again."
@@ -78,7 +78,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo "2. Device Connectivity only: Pings local network"
     echo "3. Internet Connectivity only: Pings external IP"
     printf "Enter choice [1-3]: "
-    read mode_choice
+    read mode_choice </dev/tty
 
     case "$mode_choice" in
         2) MODE="DEVICES";  EXT_VAL="";        DEV_VAL="ON"  ;;
@@ -125,7 +125,7 @@ EOF
     fi
 fi
 
-# --- 6. CREATE SCRIPT (With Log Rotation) ---
+# --- 6. CREATE SCRIPT ---
 cat <<'EOF' > "$INSTALL_DIR/netwatchd.sh"
 #!/bin/sh
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -137,11 +137,10 @@ LAST_EXT_CHECK=0
 while true; do
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     
-    # Log Rotation Check
     if [ -f "$LOGFILE" ]; then
         FILESIZE=$(wc -c < "$LOGFILE")
         if [ "$FILESIZE" -gt "$MAX_SIZE" ]; then
-            echo "$(date '+%b %d, %H:%M:%S') - Log rotated (max size reached)" > "$LOGFILE"
+            echo "$(date '+%b %d, %H:%M:%S') - Log rotated" > "$LOGFILE"
         fi
     fi
 
@@ -239,4 +238,4 @@ echo "Next Steps:"
 echo "1. Edit Settings: $INSTALL_DIR/netwatchd_settings.conf"
 echo "2. Edit IP List:  $INSTALL_DIR/netwatchd_ips.conf"
 echo "3. Restart:       /etc/init.d/netwatchd restart"
-echo " "
+echo ""
