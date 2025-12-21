@@ -4,10 +4,19 @@
 INSTALL_DIR="/root/netwatchd"
 SERVICE_NAME="netwatchd"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
+BACKUP_DIR="/tmp/netwatchd_backup"
 
 echo "🚀 Starting netwatchd Automated Setup..."
 
-# --- 1. CHECK FOR EXISTING INSTALLATION ---
+# --- 1. SAFETY BACKUP ---
+if [ -d "$INSTALL_DIR" ]; then
+    echo "💾 Creating safety backup in $BACKUP_DIR..."
+    mkdir -p "$BACKUP_DIR"
+    cp "$INSTALL_DIR"/*.conf "$BACKUP_DIR/" 2>/dev/null
+    echo "✅ Backup complete."
+fi
+
+# --- 2. CHECK FOR EXISTING INSTALLATION ---
 KEEP_CONFIG=0
 if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
     echo "⚠️ Existing installation found."
@@ -15,48 +24,48 @@ if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
     read choice
     case "$choice" in
         k|K ) 
-            echo "💾 Keeping existing configuration files."
+            echo "🔄 Upgrading script while preserving settings..."
             KEEP_CONFIG=1
+            $SERVICE_PATH stop 2>/dev/null
+            $SERVICE_PATH disable 2>/dev/null
+            rm -f "$SERVICE_PATH"
+            rm -f "$INSTALL_DIR/netwatchd.sh"
+            rm -f "/tmp/netwatchd_log.txt"
             ;;
         * ) 
-            echo "🗑️ Uninstalling old version and performing clean install..."
-            # Stop the service if running
-            /etc/init.d/netwatchd stop 2>/dev/null
-            # Disable and remove the old service script
-            /etc/init.d/netwatchd disable 2>/dev/null
+            echo "🗑️ Performing full clean uninstall..."
+            $SERVICE_PATH stop 2>/dev/null
+            $SERVICE_PATH disable 2>/dev/null
             rm -f "$SERVICE_PATH"
-            # Remove the old directory
             rm -rf "$INSTALL_DIR"
-            echo "✅ Old script uninstalled."
+            echo "✅ Old version removed."
             ;;
     esac
 fi
 
-# Create the Directory Structure
-if [ ! -d "$INSTALL_DIR" ]; then
-    mkdir -p "$INSTALL_DIR"
-fi
+# Ensure directory exists
+mkdir -p "$INSTALL_DIR"
 
-# --- 2. CHECK DEPENDENCIES ---
+# --- 3. CHECK DEPENDENCIES ---
 if ! command -v curl >/dev/null 2>&1; then
     echo "📦 curl not found. Installing..."
     opkg update && opkg install curl ca-bundle
 fi
 
-# --- 3. CREATE/PRESERVE SETTINGS ---
+# --- 4. CREATE/PRESERVE SETTINGS ---
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     cat <<EOF > "$INSTALL_DIR/netwatchd_settings.conf"
 # Router Identification
-ROUTER_NAME="My_OpenWrt_Router" # This name will now appear at the top of every Discord notification, making it easy to identify which device is reporting if you manage multiple routers.
+ROUTER_NAME="My_OpenWrt_Router"
 
 # Discord Settings
-DISCORD_URL="https://discord.com/api/webhooks/Your_Discord IP"
+DISCORD_URL="https://discord.com/api/webhooks/Your_Discord_IP"
 MY_ID="123456789123456789"
 
 # Monitoring Settings
-SCAN_INTERVAL=10 # Default 10
-FAIL_THRESHOLD=3 # Default 3
-MAX_SIZE=512000  # Default 512000
+SCAN_INTERVAL=10 
+FAIL_THRESHOLD=3 
+MAX_SIZE=512000  
 
 # Internet Check
 EXT_IP="1.1.1.1" 
@@ -72,7 +81,7 @@ else
     echo "✅ Preserved: netwatchd_settings.conf & netwatchd_ips.conf"
 fi
 
-# --- 4. CREATE SCRIPT (THE BRAINS) ---
+# --- 5. CREATE SCRIPT (THE BRAINS) ---
 cat <<'EOF' > "$INSTALL_DIR/netwatchd.sh"
 #!/bin/sh
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -154,7 +163,7 @@ while true; do
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\n**Time:** $NOW_HUMAN$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     touch "$F_Q_FAIL"
-                    echo "$NOW_HUMAN" > "$FILE_EXT_TIME"
+                    echo "$NOW_HUMAN" > "/tmp/nw_time_$SAFE_IP"
                 fi
             fi
         fi
@@ -175,7 +184,7 @@ while true; do
 done
 EOF
 
-# --- 5. SERVICE SETUP ---
+# --- 6. SERVICE SETUP ---
 chmod +x "$INSTALL_DIR/netwatchd.sh"
 cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
@@ -190,7 +199,7 @@ start_service() {
 EOF
 chmod +x "$SERVICE_PATH"
 
-# --- 6. START & FINAL MESSAGE ---
+# --- 7. START & FINAL MESSAGE ---
 "$SERVICE_PATH" enable
 "$SERVICE_PATH" restart
 rm -- "$0"
@@ -201,5 +210,5 @@ echo "📂 Folder: $INSTALL_DIR"
 echo "---"
 echo "Next Steps:"
 echo "1. Edit Settings: $INSTALL_DIR/netwatchd_settings.conf"
-echo "2. Edit IP List:   $INSTALL_DIR/netwatchd_ips.conf"
+echo "2. Edit IP List:  $INSTALL_DIR/netwatchd_ips.conf"
 echo "3. Restart:       /etc/init.d/netwatchd restart"
