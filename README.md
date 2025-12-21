@@ -26,8 +26,7 @@ Run the following command in your OpenWrt router’s terminal.
 The installer is interactive and will guide you through setup.
 
 ```sh
-wget -qO /tmp/install_netwatchd.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts/refs/heads/main/install_netwatchd
-.sh" && sh /tmp/install_netwatchd.sh
+wget -qO /tmp/install_netwatchd.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts/refs/heads/main/install_netwatchd.sh" && sh /tmp/install_netwatchd.sh
 
 ```
 
