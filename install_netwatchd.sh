@@ -106,7 +106,6 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         3) MODE="INTERNET"; EXT_VAL="1.1.1.1"; DEV_VAL="OFF" ;;
         *) MODE="BOTH";     EXT_VAL="1.1.1.1"; DEV_VAL="ON"  ;;
     esac
-    echo "✅ Mode set to: $MODE"
 
     cat <<EOF > "$CONFIG_FILE"
 # Router Identification
@@ -156,20 +155,27 @@ LAST_HB_CHECK=$(date +%s)
 while true; do
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     
+    # Standard Locale Timestamp for all logs and alerts
+    NOW_HUMAN=$(date '+%b %d, %Y %H:%M:%S')
+    NOW_SEC=$(date +%s)
+
     if [ -f "$LOGFILE" ] && [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
-        echo "$(date '+%b %d, %H:%M:%S') - Log rotated" > "$LOGFILE"
+        echo "$NOW_HUMAN - Log rotated" > "$LOGFILE"
     fi
 
-    NOW_SEC=$(date +%s)
-    NOW_HUMAN=$(date '+%b %d, %H:%M:%S')
     PREFIX="📟 **Router:** $ROUTER_NAME\n"
     MENTION="\n🔔 **Attention:** <@$MY_ID>"
     IS_INT_DOWN=0
 
+    # Heartbeat: Date time "Router name" - "Router Online"
     if [ "$HEARTBEAT" = "ON" ] && [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
         LAST_HB_CHECK=$NOW_SEC
-        MSG="💚 **Heartbeat**: Monitoring is active."
-        [ "$HB_MENTION" = "ON" ] && P="$PREFIX$MSG$MENTION" || P="$PREFIX$MSG\n**Time:** $NOW_HUMAN"
+        HB_MSG="$NOW_HUMAN \"$ROUTER_NAME\" - \"Router Online\""
+        if [ "$HB_MENTION" = "ON" ]; then
+            P="$HB_MSG$MENTION"
+        else
+            P="$HB_MSG"
+        fi
         curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$P\"}" "$DISCORD_URL" > /dev/null 2>&1
     fi
 
