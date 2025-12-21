@@ -26,13 +26,13 @@ DISCORD_URL="https://discord.com/api/webhooks/your_id"
 MY_ID="123456789012345678"
 
 # Monitoring Settings
-SCAN_INTERVAL=10 # Default 10 - Check other devices every 10 seconds
-FAIL_THRESHOLD=3 # Default 3. Be careful: With a threshold of 1, a single dropped packet (common on Wi-Fi or busy routers) will trigger a "DOWN" alert immediately. Usually, 2 or 3 is safer.
-MAX_SIZE=512000  # Default 512000. Size in bytes, make use router has enough memory to hold the log.
+SCAN_INTERVAL=10
+FAIL_THRESHOLD=3
+MAX_SIZE=512000
 
 # Internet Check
-EXT_IP="1.1.1.1" # IP to check for internet connectivity.
-EXT_INTERVAL=60  # Default 60 - Check internet every 60 seconds.
+EXT_IP="1.1.1.1"
+EXT_INTERVAL=60
 EOF
 
 # 4. Create netwatchd_ips.conf
@@ -42,7 +42,7 @@ cat <<EOF > "$INSTALL_DIR/netwatchd_ips.conf"
 1.1.1.1 # Cloudflare DNS
 EOF
 
-# 5. Create netwatchd.sh (The Main Logic)
+# 5. Create netwatchd.sh (The Brains)
 cat <<'EOF' > "$INSTALL_DIR/netwatchd.sh"
 #!/bin/sh
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -50,31 +50,22 @@ IP_LIST_FILE="$BASE_DIR/netwatchd_ips.conf"
 CONFIG_FILE="$BASE_DIR/netwatchd_settings.conf"
 LOGFILE="/tmp/netwatchd_log.txt"
 
-# Initialize variables
-SCAN_INTERVAL=10; EXT_INTERVAL=60; FAIL_THRESHOLD=3; MAX_SIZE=512000; LAST_EXT_CHECK=0
+LAST_EXT_CHECK=0
 
 while true; do
-    # Load settings from config file
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     
     NOW_SEC=$(date +%s)
     NOW_HUMAN=$(date '+%b %d, %H:%M:%S')
 
-    # Log Rotation: Prevent file from getting too big
-    if [ -f "$LOGFILE" ] && [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
-        echo "--- Log limit reached, cleared at $NOW_HUMAN ---" > "$LOGFILE"
-    fi
-
-    # --- Internet Check Logic ---
-    if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_INTERVAL" ]; then
+    # --- Internet Check ---
+    FILE_EXT_DOWN="/tmp/netwatchd_ext_down"
+    if [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
-        FILE_EXT_DOWN="/tmp/netwatchd_ext_down"
-        
         if ! ping -q -c 1 -W 2 "$EXT_IP" > /dev/null 2>&1; then
             if [ ! -f "$FILE_EXT_DOWN" ]; then
-                echo "$NOW_HUMAN - ⚠️ INTERNET DOWN (Target: $EXT_IP)" >> "$LOGFILE"
+                echo "$NOW_HUMAN - ⚠️ INTERNET DOWN" >> "$LOGFILE"
                 echo "$NOW_SEC" > "$FILE_EXT_DOWN"
-                [ -n "$DISCORD_URL" ] && curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🌐 **CRITICAL**: Internet Connection LOST!\"}" "$DISCORD_URL" > /dev/null 2>&1
             fi
         else
             if [ -f "$FILE_EXT_DOWN" ]; then
@@ -82,50 +73,50 @@ while true; do
                 D_EXT=$((NOW_SEC - START_EXT))
                 DUR_EXT="$(($D_EXT / 60))m $(($D_EXT % 60))s"
                 echo "$NOW_HUMAN - ✅ INTERNET RECOVERY (Down for $DUR_EXT)" >> "$LOGFILE"
-                [ -n "$DISCORD_URL" ] && curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🌐 **Internet Restored**\n⏱️ **Outage Duration:** $DUR_EXT\"}" "$DISCORD_URL" > /dev/null 2>&1
+                # Internet is back, we can send the recovery alert immediately
+                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🌐 **Internet Restored**\n⏱️ **Outage Duration:** $DUR_EXT\"}" "$DISCORD_URL" > /dev/null 2>&1
                 rm "$FILE_EXT_DOWN"
             fi
         fi
     fi
 
     IS_INTERNET_DOWN=0
-    [ -f "/tmp/netwatchd_ext_down" ] && IS_INTERNET_DOWN=1
+    [ -f "$FILE_EXT_DOWN" ] && IS_INTERNET_DOWN=1
 
-    # --- Device Scan Logic ---
+    # --- Device Scan ---
     while IFS= read -r line || [ -n "$line" ]; do
-        line=$(echo "$line" | tr -d '\r' | xargs 2>/dev/null || echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        line=$(echo "$line" | tr -d '\r' | xargs 2>/dev/null)
         [ -z "$line" ] || [ "${line#\#}" != "$line" ] && continue
         
         TARGET_IP=$(echo "$line" | cut -d'#' -f1 | sed 's/[[:space:]]*$//')
         NAME=$(echo "$line" | cut -s -d'#' -f2- | sed 's/^[[:space:]]*//')
         [ -z "$NAME" ] && NAME="Unknown"
 
-        ping -q -c 1 -W 2 "$TARGET_IP" > /dev/null 2>&1
-        STATUS=$?
         SAFE_IP=$(echo "$TARGET_IP" | tr '.' '_')
         F_COUNT="/tmp/nw_cnt_$SAFE_IP"; F_DOWN="/tmp/nw_down_$SAFE_IP"; F_Q_FAIL="/tmp/nw_q_fail_$SAFE_IP"; F_Q_REC="/tmp/nw_q_rec_$SAFE_IP"
 
-        if [ "$STATUS" -eq 0 ]; then
+        if ping -q -c 1 -W 2 "$TARGET_IP" > /dev/null 2>&1; then
             if [ -f "$F_DOWN" ]; then
                 START=$(cat "$F_DOWN"); D=$((NOW_SEC - START)); DUR="$(($D / 60))m $(($D % 60))s"
-                echo "$NOW_HUMAN - ✅ RECOVERY: $NAME ($TARGET_IP) - Down for $DUR" >> "$LOGFILE"
+                echo "$NOW_HUMAN - ✅ RECOVERY: $NAME ($TARGET_IP)" >> "$LOGFILE"
+                
                 if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
-                    if [ -f "$F_Q_FAIL" ]; then
-                        curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **$NAME** ($TARGET_IP) went DOWN (Delayed)\"}" "$DISCORD_URL" > /dev/null 2>&1
-                        rm "$F_Q_FAIL"; sleep 1
-                    fi
+                    # Internet is UP: Send now
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"✅ **RECOVERY**: **$NAME** is ONLINE\n⏱️ **Down for:** $DUR\"}" "$DISCORD_URL" > /dev/null 2>&1
-                    rm "$F_DOWN"
+                    rm -f "$F_DOWN" "$F_Q_FAIL" "$F_Q_REC"
                 else
-                    [ ! -f "$F_Q_FAIL" ] && touch "$F_Q_FAIL"
-                    echo "$DUR" > "$F_Q_REC"
+                    # Internet is DOWN: Queue it
+                    touch "$F_Q_REC"
+                    echo "$DUR" > "/tmp/nw_dur_$SAFE_IP"
                 fi
             fi
             echo 0 > "$F_COUNT"
         else
             COUNT=$(($(cat "$F_COUNT" 2>/dev/null || echo 0) + 1)); echo "$COUNT" > "$F_COUNT"
             if [ "$COUNT" -eq "$FAIL_THRESHOLD" ] && [ ! -f "$F_DOWN" ]; then
-                echo "$NOW_SEC" > "$F_DOWN"; echo "$NOW_HUMAN - 🚨 DOWN: $NAME ($TARGET_IP)" >> "$LOGFILE"
+                echo "$NOW_SEC" > "$F_DOWN"
+                echo "$NOW_HUMAN - 🚨 DOWN: $NAME ($TARGET_IP)" >> "$LOGFILE"
+                
                 if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\"}" "$DISCORD_URL" > /dev/null 2>&1
                 else
@@ -134,15 +125,15 @@ while true; do
             fi
         fi
 
-        # Process Queued Notifications when internet returns
+        # --- Check Queue if Internet just came back ---
         if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
             if [ -f "$F_Q_REC" ]; then
-                DUR_REC=$(cat "$F_Q_REC")
-                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **$NAME** ($TARGET_IP) went DOWN (Queued)\"}" "$DISCORD_URL" > /dev/null 2>&1; sleep 1
-                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"✅ **RECOVERY**: **$NAME** is ONLINE\n⏱️ **Down for:** $DUR_REC\"}" "$DISCORD_URL" > /dev/null 2>&1
-                rm -f "$F_DOWN" "$F_Q_REC" "$F_Q_FAIL"
+                DUR_VAL=$(cat "/tmp/nw_dur_$SAFE_IP")
+                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **$NAME** ($TARGET_IP) was DOWN during outage.\n✅ Now ONLINE. (Total Down: $DUR_VAL)\"}" "$DISCORD_URL" > /dev/null 2>&1
+                rm -f "$F_DOWN" "$F_Q_FAIL" "$F_Q_REC" "/tmp/nw_dur_$SAFE_IP"
             elif [ -f "$F_Q_FAIL" ]; then
-                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **$NAME** ($TARGET_IP) is DOWN! (Delayed)\"}" "$DISCORD_URL" > /dev/null 2>&1; rm "$F_Q_FAIL"
+                curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"🚨 **ALERT**: **$NAME** ($TARGET_IP) is DOWN! (Reported after internet recovery)\"}" "$DISCORD_URL" > /dev/null 2>&1
+                rm -f "$F_Q_FAIL"
             fi
         fi
     done < "$IP_LIST_FILE"
@@ -160,22 +151,12 @@ start_service() {
     procd_open_instance
     procd_set_param command /bin/sh "$INSTALL_DIR/netwatchd.sh"
     procd_set_param respawn
-    procd_set_param stdout 1
-    procd_set_param stderr 1
     procd_close_instance
 }
 EOF
 chmod +x "$SERVICE_PATH"
 
-# 7. Enable and Start
+# 7. Start
 "$SERVICE_PATH" enable
-"$SERVICE_PATH" start
-
-echo "---"
-echo "✅ Installation complete!"
-echo "📂 Folder: $INSTALL_DIR"
-echo "---"
-echo "Next Steps:"
-echo "1. Edit Settings: vi $INSTALL_DIR/netwatchd_settings.conf"
-echo "2. Edit IP List:  vi $INSTALL_DIR/netwatchd_ips.conf"
-echo "3. Restart:      /etc/init.d/netwatchd restart"
+"$SERVICE_PATH" restart
+echo "✅ Fixed! Alerts will now wait for Internet Connectivity."
