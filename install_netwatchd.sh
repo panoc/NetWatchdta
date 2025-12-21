@@ -1,12 +1,16 @@
 #!/bin/sh
 
+# --- INITIAL SPACING ---
+echo ""
+echo "-------------------------------------------------------"
+echo "🚀 Starting netwatchd Automated Setup..."
+echo "-------------------------------------------------------"
+
 # --- CONFIGURATION ---
 INSTALL_DIR="/root/netwatchd"
 SERVICE_NAME="netwatchd"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
 BACKUP_DIR="/tmp/netwatchd_backup"
-
-echo "🚀 Starting netwatchd Automated Setup..."
 
 # --- 1. SAFETY BACKUP ---
 if [ -d "$INSTALL_DIR" ]; then
@@ -84,7 +88,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo "✅ Mode set to: $MODE"
 fi
 
-# --- 5. CREATE SETTINGS (COMMENTS RESTORED) ---
+# --- 5. CREATE SETTINGS (COMMENTS PRESERVED) ---
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     cat <<EOF > "$INSTALL_DIR/netwatchd_settings.conf"
 # Router Identification
