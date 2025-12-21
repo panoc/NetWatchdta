@@ -21,7 +21,7 @@ if ! command -v curl >/dev/null 2>&1; then
     echo "📥 curl not found. Attempting to install..."
     opkg update && opkg install curl ca-bundle
     if [ $? -ne 0 ]; then
-        echo "❌ Error: Failed to install curl. Please check your internet connection."
+        echo "❌ Error: Failed to install curl. Aborting."
         exit 1
     fi
 fi
@@ -45,7 +45,7 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 
-# --- 4. CLEAN INSTALL INPUTS & AUTO-TEST ---
+# --- 4. CLEAN INSTALL INPUTS & VALIDATION ---
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo "---"
     printf "🔗 Enter Discord Webhook URL: "
@@ -53,16 +53,20 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     printf "👤 Enter Discord User ID (for @mentions): "
     read user_id
     
-    # Automatic Test Notification
     echo "🧪 Sending test notification to Discord..."
     TEST_PAYLOAD="{\"content\": \"📟 **Router Setup**: Connectivity test successful! <@$user_id>\"}"
     curl -s -H "Content-Type: application/json" -X POST -d "$TEST_PAYLOAD" "$user_webhook" > /dev/null
     
-    if [ $? -eq 0 ]; then
-        echo "✅ Test message sent! Check your Discord."
-    else
-        echo "⚠️ Warning: Test message failed. Please check your Webhook URL."
+    echo "---"
+    printf "❓ Did you receive the Discord notification? [y/n]: "
+    read confirm_test
+    
+    if [ "$confirm_test" != "y" ] && [ "$confirm_test" != "Y" ]; then
+        echo "❌ Installation Aborted. Please check your Webhook URL and try again."
+        rm -rf "$INSTALL_DIR"
+        exit 1
     fi
+    echo "✅ Connectivity confirmed."
 
     echo "---"
     echo "Select Monitoring Mode:"
@@ -84,37 +88,32 @@ fi
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     cat <<EOF > "$INSTALL_DIR/netwatchd_settings.conf"
 # Router Identification
-ROUTER_NAME="My_OpenWrt_Router" # This name appears in Discord notifications.
+ROUTER_NAME="My_OpenWrt_Router"
 
 # Discord Settings
-DISCORD_URL="$user_webhook" # Your Discord Webhook URL.
-MY_ID="$user_id" # Your Discord User ID (for @mentions).
+DISCORD_URL="$user_webhook"
+MY_ID="$user_id"
 
 # Monitoring Settings
-SCAN_INTERVAL=10 # Seconds between pings. Default is 10.
-FAIL_THRESHOLD=3 # Number of failed pings before sending an alert. Default is 3.
-MAX_SIZE=512000  # Max log file size in bytes.
+SCAN_INTERVAL=10 
+FAIL_THRESHOLD=3 
+MAX_SIZE=512000  
 
 # Internet Connectivity Check
-EXT_IP="$EXT_VAL" # External IP to ping (e.g., 1.1.1.1). Leave empty to disable.
-EXT_INTERVAL=60 # Seconds between internet checks. Default is 60.
+EXT_IP="$EXT_VAL"
+EXT_INTERVAL=60
 
 # Local Device Monitoring
-DEVICE_MONITOR="$DEV_VAL" # Set to ON to enable local IP monitoring from netwatchd_ips.conf.
+DEVICE_MONITOR="$DEV_VAL"
 EOF
 
-    # Initialize IP list
     cat <<EOF > "$INSTALL_DIR/netwatchd_ips.conf"
 # Format: IP_ADDRESS # NAME
-# Example: 192.168.1.50 # Home Server
 EOF
 
     if [ "$DEV_VAL" = "ON" ]; then
         LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
-        if [ -n "$LOCAL_IP" ]; then
-            echo "$LOCAL_IP # Router Gateway" >> "$INSTALL_DIR/netwatchd_ips.conf"
-            echo "🏠 Added local IP ($LOCAL_IP) to monitor list."
-        fi
+        [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP # Router Gateway" >> "$INSTALL_DIR/netwatchd_ips.conf"
     fi
 fi
 
@@ -142,7 +141,6 @@ while true; do
             LAST_EXT_CHECK=$NOW_SEC
             if ! ping -q -c 1 -W 2 "$EXT_IP" > /dev/null 2>&1; then
                 if [ ! -f "$FILE_EXT_DOWN" ]; then
-                    echo "$NOW_HUMAN - ⚠️ INTERNET DOWN" >> "$LOGFILE"
                     echo "$NOW_SEC" > "$FILE_EXT_DOWN"
                     echo "$NOW_HUMAN" > "$FILE_EXT_TIME"
                 fi
@@ -150,7 +148,6 @@ while true; do
                 if [ -f "$FILE_EXT_DOWN" ]; then
                     START_EXT=$(cat "$FILE_EXT_DOWN"); TIME_LOST=$(cat "$FILE_EXT_TIME")
                     D_EXT=$((NOW_SEC - START_EXT)); DUR_EXT="$(($D_EXT / 60))m $(($D_EXT % 60))s"
-                    echo "$NOW_HUMAN - ✅ INTERNET RECOVERY" >> "$LOGFILE"
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🌐 **Internet Restored**\n❌ **Lost at:** $TIME_LOST\n✅ **Restored at:** $NOW_HUMAN\n**Total Outage:** $DUR_EXT$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                     rm -f "$FILE_EXT_DOWN" "$FILE_EXT_TIME"
                 fi
@@ -172,7 +169,6 @@ while true; do
             if ping -q -c 1 -W 2 "$TARGET_IP" > /dev/null 2>&1; then
                 if [ -f "$F_DOWN" ]; then
                     START=$(cat "$F_DOWN"); D=$((NOW_SEC - START)); DUR="$(($D / 60))m $(($D % 60))s"
-                    echo "$NOW_HUMAN - ✅ RECOVERY: $NAME" >> "$LOGFILE"
                     if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX✅ **RECOVERY**: **$NAME** is ONLINE\n**Time:** $NOW_HUMAN\n**Down for:** $DUR$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                         rm -f "$F_DOWN"
@@ -183,7 +179,6 @@ while true; do
                 COUNT=$(($(cat "$F_COUNT" 2>/dev/null || echo 0) + 1)); echo "$COUNT" > "$F_COUNT"
                 if [ "$COUNT" -eq "$FAIL_THRESHOLD" ] && [ ! -f "$F_DOWN" ]; then
                     echo "$NOW_SEC" > "$F_DOWN"
-                    echo "$NOW_HUMAN - 🔴 DOWN: $NAME" >> "$LOGFILE"
                     if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\n**Time:** $NOW_HUMAN$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                     fi
