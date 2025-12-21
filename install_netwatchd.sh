@@ -7,20 +7,39 @@ SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
 
 echo "🚀 Starting netwatchd Automated Setup..."
 
-# 1. Create the Directory Structure
+# --- 1. CHECK FOR EXISTING INSTALLATION ---
+KEEP_CONFIG=0
+if [ -d "$INSTALL_DIR" ]; then
+    echo "⚠️ Existing installation found at $INSTALL_DIR"
+    printf "Do you want to (c)lean install or (k)eep existing settings? [c/k]: "
+    read choice
+    case "$choice" in
+        k|K ) 
+            echo "💾 Keeping existing configuration files."
+            KEEP_CONFIG=1
+            ;;
+        * ) 
+            echo "🗑️ Performing clean install..."
+            /etc/init.d/netwatchd stop 2>/dev/null
+            rm -rf "$INSTALL_DIR"
+            ;;
+    esac
+fi
+
+# Create the Directory Structure
 if [ ! -d "$INSTALL_DIR" ]; then
-    echo "📁 Creating directory $INSTALL_DIR..."
     mkdir -p "$INSTALL_DIR"
 fi
 
-# 2. Check Dependencies
+# --- 2. CHECK DEPENDENCIES ---
 if ! command -v curl >/dev/null 2>&1; then
     echo "📦 curl not found. Installing..."
     opkg update && opkg install curl ca-bundle
 fi
 
-# 3. Create netwatchd_settings.conf
-cat <<EOF > "$INSTALL_DIR/netwatchd_settings.conf"
+# --- 3. CREATE/PRESERVE SETTINGS ---
+if [ "$KEEP_CONFIG" -eq 0 ]; then
+    cat <<EOF > "$INSTALL_DIR/netwatchd_settings.conf"
 # Router Identification
 ROUTER_NAME="My_OpenWrt_Router" # This name will now appear at the top of every Discord notification, making it easy to identify which device is reporting if you manage multiple routers.
 
@@ -38,14 +57,17 @@ EXT_IP="1.1.1.1"
 EXT_INTERVAL=60
 EOF
 
-# 4. Create netwatchd_ips.conf
-cat <<EOF > "$INSTALL_DIR/netwatchd_ips.conf"
+    cat <<EOF > "$INSTALL_DIR/netwatchd_ips.conf"
 # Format: IP_ADDRESS # NAME
 8.8.8.8 # Google DNS
 1.1.1.1 # Cloudflare DNS
 EOF
+else
+    echo "✅ Preserved: netwatchd_settings.conf & netwatchd_ips.conf"
+fi
 
-# 5. Create netwatchd.sh (The Brains)
+# --- 4. CREATE SCRIPT (THE BRAINS) ---
+# This part always updates to ensure you have the latest logic
 cat <<'EOF' > "$INSTALL_DIR/netwatchd.sh"
 #!/bin/sh
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -124,7 +146,6 @@ while true; do
                 echo "$NOW_SEC" > "$F_DOWN"
                 echo "$NOW_HUMAN - 🔴 DOWN: $NAME ($TARGET_IP)" >> "$LOGFILE"
                 if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
-                    # Changed Alert icon to Red Circle
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\n**Time:** $NOW_HUMAN$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     touch "$F_Q_FAIL"
@@ -136,12 +157,10 @@ while true; do
         if [ "$IS_INTERNET_DOWN" -eq 0 ]; then
             if [ -f "$F_Q_REC" ]; then
                 DUR_VAL=$(cat "/tmp/nw_dur_$SAFE_IP"); T_VAL=$(cat "/tmp/nw_time_$SAFE_IP")
-                # Changed Queue Alert to Red Circle
                 curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **$NAME** ($TARGET_IP) was DOWN.\n**Detected at:** $T_VAL\n✅ **Now ONLINE** (Total: $DUR_VAL)$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                 rm -f "$F_DOWN" "$F_Q_FAIL" "$F_Q_REC" "/tmp/nw_dur_$SAFE_IP" "/tmp/nw_time_$SAFE_IP"
             elif [ -f "$F_Q_FAIL" ]; then
                 T_VAL=$(cat "/tmp/nw_time_$SAFE_IP")
-                # Changed Queue Alert to Red Circle
                 curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\n**Detected at:** $T_VAL$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                 rm -f "$F_Q_FAIL" "/tmp/nw_time_$SAFE_IP"
             fi
@@ -151,7 +170,7 @@ while true; do
 done
 EOF
 
-# 6. Service Setup
+# --- 5. SERVICE SETUP ---
 chmod +x "$INSTALL_DIR/netwatchd.sh"
 cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
@@ -166,7 +185,7 @@ start_service() {
 EOF
 chmod +x "$SERVICE_PATH"
 
-# 7. Start & Cleanup
+# --- 6. START & CLEANUP ---
 "$SERVICE_PATH" enable
 "$SERVICE_PATH" restart
 rm -- "$0"
@@ -174,8 +193,7 @@ rm -- "$0"
 echo "---"
 echo "✅ Installation complete!"
 echo "📂 Folder: $INSTALL_DIR"
+if [ "$KEEP_CONFIG" -eq 1 ]; then
+    echo "ℹ️  Settings were preserved."
+fi
 echo "---"
-echo "Next Steps:"
-echo "1. Edit Settings: vi $INSTALL_DIR/netwatchd_settings.conf"
-echo "2. Edit IP List:  vi $INSTALL_DIR/netwatchd_ips.conf"
-echo "3. Restart:      /etc/init.d/netwatchd restart"
