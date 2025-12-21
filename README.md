@@ -3,7 +3,7 @@
 **netwatchda** is a lightweight, POSIX-compliant shell daemon for **OpenWrt routers** that monitors both internet connectivity and local LAN devices.  
 It sends **real-time outage and recovery alerts** directly to your **Discord channel** using webhooks.
 
-Designed for reliability, minimal resource usage, and zero bloat.
+Designed for easy installation, reliability, minimal resource usage, and zero bloat.
 
 ---
 
