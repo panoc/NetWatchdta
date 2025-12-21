@@ -126,7 +126,7 @@ tail -f /tmp/netwatchd_log.txt
 To remove netwatchd, run the official uninstaller:
 
 ```sh
-wget --no-check-certificate -qO /tmp/uninstall_netwatchda.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchd.sh" && sh /tmp/uninstall_netwatchda.sh
+wget --no-check-certificate -qO /tmp/uninstall_netwatchda.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchda.sh" && sh /tmp/uninstall_netwatchda.sh
 ```
 
 You will be prompted to:
