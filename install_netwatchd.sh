@@ -9,8 +9,8 @@ echo "🚀 Starting netwatchd Automated Setup..."
 
 # --- 1. CHECK FOR EXISTING INSTALLATION ---
 KEEP_CONFIG=0
-if [ -d "$INSTALL_DIR" ]; then
-    echo "⚠️ Existing installation found at $INSTALL_DIR"
+if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
+    echo "⚠️ Existing installation found."
     printf "Do you want to (c)lean install or (k)eep existing settings? [c/k]: "
     read choice
     case "$choice" in
@@ -19,9 +19,15 @@ if [ -d "$INSTALL_DIR" ]; then
             KEEP_CONFIG=1
             ;;
         * ) 
-            echo "🗑️ Performing clean install..."
+            echo "🗑️ Uninstalling old version and performing clean install..."
+            # Stop the service if running
             /etc/init.d/netwatchd stop 2>/dev/null
+            # Disable and remove the old service script
+            /etc/init.d/netwatchd disable 2>/dev/null
+            rm -f "$SERVICE_PATH"
+            # Remove the old directory
             rm -rf "$INSTALL_DIR"
+            echo "✅ Old script uninstalled."
             ;;
     esac
 fi
@@ -148,7 +154,7 @@ while true; do
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$PREFIX🔴 **ALERT**: **$NAME** ($TARGET_IP) is DOWN!\n**Time:** $NOW_HUMAN$MENTION\"}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     touch "$F_Q_FAIL"
-                    echo "$NOW_HUMAN" > "/tmp/nw_time_$SAFE_IP"
+                    echo "$NOW_HUMAN" > "$FILE_EXT_TIME"
                 fi
             fi
         fi
