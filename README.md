@@ -17,7 +17,8 @@ Designed for reliability, minimal resource usage, and zero bloat.
 - **Discord Webhook Integration** — Supports **@mentions** for instant awareness
 - **Automatic Recovery Reports** — Calculates and reports total downtime once a device reconnects
 - **Built-in Log Rotation** — Protects router RAM from excessive log growth
-
+- **Customizable Heartbeat** — Choose your check-in frequency (e.g., every 12h, 24h, or even 1h) and toggle mentions specifically for heartbeats to keep your phone quiet while still knowing the system is alive.
+  
 ---
 
 ## 🚀 Installation
@@ -82,16 +83,6 @@ Restart the service after making changes:
 ```
 
 ---
-
-## 📋 Updates for your GitHub
-
-You can now mention in your Features that the script includes a Customizable Heartbeat:
-
-Choose your check-in frequency (e.g., every 12h, 24h, or even 1h).
-
-Toggle mentions specifically for heartbeats to keep your phone quiet while still knowing the system is alive.
-
-
 
 ## 📊 Monitoring & Logs
 
