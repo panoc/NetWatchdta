@@ -93,7 +93,7 @@ View resource usage:
 top -b -n 1 | grep netwatchd
 ```
 
-#🖥️ Option 1: LuCI (Web Interface)
+### 🖥️ Option 1: LuCI (Web Interface)
 
 To view logs without using a terminal:
 
@@ -111,7 +111,7 @@ To view logs without using a terminal:
 
         You can now check your monitoring history with one click from your browser.
 
-- ⌨️ Option 2: Terminal (Standard Commands)
+### ⌨️ Option 2: Terminal (Standard Commands)
 
 Follow connectivity logs in real time:
 
