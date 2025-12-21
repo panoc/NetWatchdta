@@ -108,6 +108,19 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         printf "🔔 Mention in Heartbeat? [y/n]: "
         read hb_m </dev/tty
         [ "$hb_m" = "y" ] || [ "$hb_m" = "Y" ] && HB_MENTION="ON" || HB_MENTION="OFF"
+
+        printf "🧪 Send a Test Heartbeat now to check format? [y/n]: "
+        read hb_test_confirm </dev/tty
+        if [ "$hb_test_confirm" = "y" ] || [ "$hb_test_confirm" = "Y" ]; then
+            HB_MSG="$NOW_HUMAN | $router_name_input | Router Online"
+            if [ "$HB_MENTION" = "ON" ]; then
+                PAYLOAD="{\"content\": \"💓 **Heartbeat**: $HB_MSG\n🔔 **Attention:** <@$user_id>\"}"
+            else
+                PAYLOAD="{\"content\": \"💓 **Heartbeat**: $HB_MSG\"}"
+            fi
+            curl -s -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$user_webhook" > /dev/null
+            echo "✅ Heartbeat test sent."
+        fi
     else
         HB_VAL="OFF"; HB_SEC="86400"; HB_MENTION="OFF"
     fi
