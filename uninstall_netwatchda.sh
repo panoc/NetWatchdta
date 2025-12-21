@@ -33,7 +33,7 @@ if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
             KEEP_CONF=1
             echo "📂 Preservation Mode: Configuration files will be kept."
             ;;
-        1|*)
+        *)
             KEEP_CONF=0
             echo "🗑️  Full Uninstall: All files and settings will be deleted."
             ;;
@@ -48,9 +48,11 @@ if [ -f "$SERVICE_PATH" ]; then
     echo "🛑 Stopping and disabling service..."
     $SERVICE_PATH stop 2>/dev/null
     $SERVICE_PATH disable 2>/dev/null
-    # Kill any lingering sleep or script processes
-    pid=$(pgrep -f "netwatchda.sh")
-    [ -n "$pid" ] && kill -9 $pid 2>/dev/null
+    
+    # Prevent self-killing: Find the background PID but ignore this script's PID ($$)
+    TARGET_PID=$(pgrep -f "netwatchda.sh" | grep -v "$$")
+    [ -n "$TARGET_PID" ] && kill -9 $TARGET_PID 2>/dev/null
+    
     rm -f "$SERVICE_PATH"
     echo "✅ Service removed."
 fi
@@ -66,7 +68,6 @@ echo "✅ Temp files cleared."
 
 # --- 4. REMOVE INSTALLATION FILES ---
 if [ "$KEEP_CONF" -eq 1 ]; then
-    # Specifically remove only the core logic script
     if [ -f "$INSTALL_DIR/netwatchda.sh" ]; then
         rm -f "$INSTALL_DIR/netwatchda.sh"
         echo "✅ Core script removed."
@@ -81,7 +82,6 @@ else
 fi
 
 # --- 5. FINAL CLEANUP ---
-# The script deletes itself
 rm -- "$0"
 
 echo "---"
