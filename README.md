@@ -28,7 +28,7 @@ Run the following command in your OpenWrt router’s terminal.
 The installer is interactive and will guide you through setup.
 
 ```sh
-wget -qO /tmp/install_netwatchd.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/install_netwatchd.sh" && sh /tmp/install_netwatchd.sh
+wget --no-check-certificate -qO /tmp/install_netwatchd.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/install_netwatchd.sh" && sh /tmp/install_netwatchd.sh
 
 ```
 
@@ -126,7 +126,7 @@ tail -f /tmp/netwatchd_log.txt
 To remove netwatchd, run the official uninstaller:
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchd.sh | sh
+wget --no-check-certificate -qO /tmp/uninstall_netwatchd.sh "https://raw.githubusercontent.com/panoc/Net-Watch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchd.sh" && sh /tmp/uninstall_netwatchd.sh
 ```
 
 You will be prompted to:
