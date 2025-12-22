@@ -103,8 +103,8 @@ DEV_PING_COUNT=4 # Number of pings per check. Default 4.```
 <details>
 <summary>Define LAN devices to monitor.</summary>
 <pre>
-# Format:
-# IP_ADDRESS  # DEVICE NAME
+# Format: IP_ADDRESS @ NAME
+# Example: 192.168.1.50 @ Home Server
 192.168.1.50  @ NAS Server
 192.168.1.10  @ Smart Home Hub
 </pre>
