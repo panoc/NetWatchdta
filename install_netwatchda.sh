@@ -265,19 +265,21 @@ echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
 cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
 # netwatchda - Network Monitoring for OpenWrt
-# Fixed: Overnight logic and JSON string escaping
+# Fixed: Logging visibility and strict IP parsing
 
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
 CONFIG_FILE="$BASE_DIR/netwatchda_settings.conf"
 LOGFILE="/tmp/netwatchda_log.txt"
 SILENT_BUFFER="/tmp/nwda_silent_buffer"
+
+# Initialize state variables
 LAST_EXT_CHECK=0
 LAST_DEV_CHECK=0
 LAST_HB_CHECK=$(date +%s)
 [ ! -f "$SILENT_BUFFER" ] && touch "$SILENT_BUFFER"
+[ ! -f "$LOGFILE" ] && touch "$LOGFILE"
 
-# Load config helper safely (strips INI headers)
 load_config() {
     [ -f "$CONFIG_FILE" ] && eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
 }
@@ -307,29 +309,7 @@ while true; do
         [ $? -eq 0 ] && > "$SILENT_BUFFER"
     fi
 
-    # Log Rotation Check
-    if [ -f "$LOGFILE" ] && [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
-        echo "$NOW_HUMAN - [SYSTEM] Log rotated." > "$LOGFILE"
-    fi
-
-    PREFIX="📟 **Router:** $ROUTER_NAME\n"
-    MENTION="\n🔔 **Attention:** <@$MY_ID>"
-    IS_INT_DOWN=0
-
-    # Heartbeat Logic
-    if [ "$HEARTBEAT" = "ON" ] && [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
-        LAST_HB_CHECK=$NOW_SEC
-        HB_MSG="$NOW_HUMAN | $ROUTER_NAME | Router Online"
-        DESC="💓 **Heartbeat**: $HB_MSG"
-        [ "$HB_MENTION" = "ON" ] && DESC="$DESC$MENTION"
-        if [ "$IS_SILENT" -eq 0 ]; then
-            curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$DESC\", \"color\": 15844367}]}" "$DISCORD_URL" > /dev/null 2>&1
-        else
-            echo "💓 Heartbeat at $NOW_HUMAN" >> "$SILENT_BUFFER"
-        fi
-    fi
-
-    # Internet Check Logic
+    # --- INTERNET CHECK ---
     if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
         FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"; FC="/tmp/nwda_ext_c"
@@ -343,6 +323,7 @@ while true; do
         else
             if [ -f "$FD" ]; then
                 S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
+                echo "$NOW_HUMAN - [SUCCESS] INTERNET RESTORED (Down $DR)" >> "$LOGFILE"
                 if [ "$IS_SILENT" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"**Outage:** $DR\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
@@ -353,24 +334,25 @@ while true; do
             echo 0 > "$FC"
         fi
     fi
-    [ -f "/tmp/nwda_ext_d" ] && IS_INT_DOWN=1
 
-    # Local Device Check Logic (STRICT PARSING)
+    # --- DEVICE CHECK ---
     if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
-        grep -E '^[0-9]' "$IP_LIST_FILE" | while IFS= read -r line || [ -n "$line" ]; do
-            case "$line" in ""|\#*) continue ;; esac
-            TIP=$(echo "$line" | cut -d'#' -f1 | tr -d ' \t\r\n')
-            NAME=$(echo "$line" | cut -s -d'#' -f2- | sed 's/^[ \t]*//;s/[ \t]*$//')
-            [ -z "$NAME" ] && NAME="Unknown"
+        sed -e 's/#.*//' -e '/^$/d' "$IP_LIST_FILE" | while read -r line; do
+            TIP=$(echo "$line" | awk '{print $1}')
+            NAME=$(echo "$line" | awk '{print $2}')
+            [ -z "$NAME" ] && NAME="$TIP"
             [ -z "$TIP" ] && continue
             
-            SIP=$(echo "$TIP" | tr '.' '_'); FC="/tmp/nwda_c_$SIP"; FD="/tmp/nwda_d_$SIP"; FT="/tmp/nwda_t_$SIP"
+            SIP=$(echo "$TIP" | tr '.' '_')
+            FC="/tmp/nwda_c_$SIP"; FD="/tmp/nwda_d_$SIP"; FT="/tmp/nwda_t_$SIP"
+            
             if ping -q -c "$DEV_PING_COUNT" -W 2 "$TIP" > /dev/null 2>&1; then
                 if [ -f "$FD" ]; then
                     S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
+                    echo "$NOW_HUMAN - [SUCCESS] $NAME ONLINE (Down $DR)" >> "$LOGFILE"
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"✅ Device Online\", \"description\": \"$NAME online\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"✅ Device Online\", \"description\": \"**$NAME** back online ($DR)\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
                         echo "✅ $NAME Up: $NOW_HUMAN (Down $DR)" >> "$SILENT_BUFFER"
                     fi
@@ -381,13 +363,22 @@ while true; do
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                 if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
-                    if [ "$IS_SILENT" -eq 1 ]; then
+                    echo "$NOW_HUMAN - [ALERT] $NAME DOWN" >> "$LOGFILE"
+                    if [ "$IS_SILENT" -eq 0 ]; then
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**$NAME** ($TIP) is unreachable.\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    else
                         echo "🔴 $NAME Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                     fi
                 fi
             fi
         done
     fi
+
+    # Log Rotation Check
+    if [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
+        echo "$NOW_HUMAN - [SYSTEM] Log rotated." > "$LOGFILE"
+    fi
+
     sleep 1
 done
 EOF
