@@ -266,7 +266,6 @@ echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
 cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
 # netwatchda - Network Monitoring for OpenWrt
-# Colors: Red (Critical), Green (Success), Yellow (Warning), Cyan (Info), Purple (Summary)
 
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
@@ -333,8 +332,8 @@ while true; do
                 echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN (Target: $EXT_IP)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
-                    # Critical / Down -> Red color - decimal 15158332
-                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    # Critical / Down -> Vivid Red color - decimal 15548997
+                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     echo "🌐 Internet Outage: $NOW_HUMAN" >> "$SILENT_BUFFER"
                 fi
@@ -350,7 +349,7 @@ while true; do
                 echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] INTERNET UP (Target: $EXT_IP | Down $DR)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
-                    # Success / Online -> Green color - decimal 3066993
+                    # Success / Online -> Vivid Green color - decimal 3066993
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"Connectivity Restored\", \"description\": \"$MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     echo -e "$MSG" >> "$SILENT_BUFFER"
@@ -381,7 +380,7 @@ while true; do
                     echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" >> "$LOGFILE"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # Success / Online -> Green color - decimal 3066993
+                        # Success / Online -> Vivid Green color - decimal 3066993
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$D_MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
                         echo -e "$D_MSG" >> "$SILENT_BUFFER"
@@ -395,8 +394,8 @@ while true; do
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                     echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" >> "$LOGFILE"
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # Critical / Down -> Red color - decimal 15158332
-                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $NOW_HUMAN\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
+                        # Critical / Down -> Vivid Red color - decimal 15548997
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
                         echo -e "🔴 $NAME ($TIP) Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                     fi
@@ -449,8 +448,8 @@ clear() {
 discord() {
     if [ -f "$CONFIG_FILE" ]; then
         eval "\$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
-        # Warning Notification -> Yellow color - decimal 15859727
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered from CLI.\", \"color\": 15859727}]}" "\$DISCORD_URL"
+        # Warning Notification -> Pure Yellow color - decimal 16776960
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered from CLI.\", \"color\": 16776960}]}" "\$DISCORD_URL"
         echo "Warning test message (Yellow) sent."
     fi
 }
@@ -469,7 +468,7 @@ curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\"
 # --- FINAL OUTPUT ---
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete! Warning (Yellow) & Info (Cyan) split.${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete! Vivid colors applied.${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
