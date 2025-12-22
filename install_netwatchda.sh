@@ -1,6 +1,7 @@
 #!/bin/sh
 # netwatchda Installer - Automated Setup for OpenWrt
 # Copyright (C) 2025 panoc
+# Licensed under the GNU General Public License v3.0
 
 # --- SELF-CLEAN LOGIC ---
 # This ensures the installer script deletes itself after execution
@@ -274,7 +275,7 @@ SILENT_BUFFER="/tmp/nwda_silent_buffer"
 LAST_EXT_CHECK=0
 LAST_DEV_CHECK=0
 LAST_HB_CHECK=$(date +%s)
-SUMMARY_SENT=0
+touch "$SILENT_BUFFER"
 
 # Load config helper safely (strips INI headers)
 load_config() {
@@ -336,6 +337,9 @@ while true; do
             if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                 echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                 echo "$NOW_HUMAN - [ALERT] INTERNET DOWN" >> "$LOGFILE"
+                if [ "$IS_SILENT" -eq 1 ]; then
+                   echo "🌐 Internet Outage Started: $NOW_HUMAN" >> "$SILENT_BUFFER"
+                fi
             fi
         else
             if [ -f "$FD" ]; then
@@ -344,7 +348,7 @@ while true; do
                 if [ "$IS_SILENT" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"$PREFIX❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Outage:** $DR$MENTION\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
-                    echo "🌐 Internet Outage: $T to $NOW_HUMAN ($DR)" >> "$SILENT_BUFFER"
+                    echo "🌐 Internet Restored: $NOW_HUMAN (Down for $DR)" >> "$SILENT_BUFFER"
                 fi
                 rm -f "$FD" "$FT"
             fi
