@@ -222,23 +222,21 @@ All configuration is stored in `/root/netwatchda/`. You can edit these files via
 <summary><strong>Usage: /etc/init.d/netwatchda</strong> [command]</summary>
 <pre>
   
--	start          - Start the service
-- stop           - Stop the service
-- restart        - Restart the service
-- reload         - Reload configuration files (or restart if service does not implement reload)
-- enable         - Enable service autostart
-- disable        - Disable service autostart
-- enabled        - Check if service is started on boot
-- status         - Check if monitor is running
-- logs           - View last 20 log entries
-- clear          - Clear log file
-- discord        - Test discord notification
-- purge          - Interactive smart uninstaller
-- running        - Check if service is running
-- status         - Service status
-- trace          - Start with syscall trace
-- info           - Dump procd service info
-- help			     - Display this help message
+-	**start**     - Start the service
+- **stop**      - Stop the service
+- **restart**   - Restart the service
+- **reload**    - Reload configuration files (or restart if service does not implement reload)
+- **enable**    - Enable service autostart
+- **disable**   - Disable service autostart
+- **enabled**   - Check if service is started on boot
+- **status**    - Check if monitor is running
+- **logs**      - View last 20 log entries
+- **clear**     - Clear log file
+- **discord**   - Test discord notification
+- **purge**     - Interactive smart uninstaller
+- **running**   - Check if service is running
+- **status**    - Service status
+- **help**	    - Display this help message
   </pre>
 </details>
 
