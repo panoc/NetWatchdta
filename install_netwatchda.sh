@@ -468,7 +468,7 @@ curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\"
 # --- FINAL OUTPUT ---
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete! Vivid colors applied.${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete! ips.conf header updated.${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
