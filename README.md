@@ -162,7 +162,8 @@ Usage: /etc/init.d/netwatchda [command]
 - running         Check if service is running
 - trace           Start with syscall trace
 - info            Dump procd service info
-- help			Display this help message
+- clear           Clear log file
+- help			      Display this help message
 
 ## 🤝 Contributing
 
