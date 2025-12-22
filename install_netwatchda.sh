@@ -54,7 +54,7 @@ MIN_FLASH_KB=3072 # 3MB Threshold
 # RAM Check (/tmp partition)
 FREE_RAM_KB=$(df /tmp | awk 'NR==2 {print $4}')
 MIN_RAM_KB=512 # 512KB Threshold
-DEFAULT_MAX_LOG=512000 # Default 512KB for log size
+DEFAULT_MAX_LOG=51200 # Default 50KB for log size (51200 bytes)
 
 if ! command -v curl >/dev/null 2>&1; then
     echo -e "${CYAN}🔍 curl not found. Checking flash storage...${NC}"
@@ -79,8 +79,8 @@ fi
 # Determine Log size based on RAM availability (RAM Guard Logic)
 if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
     echo -e "${YELLOW}⚠️  Low RAM detected in /tmp ($FREE_RAM_KB KB).${NC}"
-    echo -e "${CYAN}📉 Scaling down log rotation size to 64KB for system stability.${NC}"
-    DEFAULT_MAX_LOG=65536 # 64KB
+    echo -e "${CYAN}📉 Scaling down log rotation size to 10KB for system stability.${NC}"
+    DEFAULT_MAX_LOG=10240 # 10KB (10240 bytes)
 else
     echo -e "${GREEN}✅ Sufficient RAM for standard logging ($FREE_RAM_KB KB available).${NC}"
 fi
@@ -597,4 +597,5 @@ echo -e "  Uninstall       : ${RED}/etc/init.d/netwatchda purge${NC}"
 echo -e "  Edit Settings   : ${CYAN}$CONFIG_FILE${NC}"
 echo -e "  Edit IP List    : ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "  Restart         : ${YELLOW}/etc/init.d/netwatchda restart${NC}"
+echo ""
 echo ""
