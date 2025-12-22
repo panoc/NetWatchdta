@@ -192,14 +192,19 @@ LOGFILE="/tmp/netwatchda_log.txt"
 LAST_EXT_CHECK=0
 LAST_HB_CHECK=$(date +%s)
 
+# Initialize Log File
+NOW_HUMAN=$(date '+%b %d, %Y %H:%M:%S')
+echo "$NOW_HUMAN - [SYSTEM] netwatchda service started." > "$LOGFILE"
+
 while true; do
     [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
     
     NOW_HUMAN=$(date '+%b %d, %Y %H:%M:%S')
     NOW_SEC=$(date +%s)
 
+    # Log Rotation Check
     if [ -f "$LOGFILE" ] && [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
-        echo "$NOW_HUMAN - Log rotated" > "$LOGFILE"
+        echo "$NOW_HUMAN - [SYSTEM] Log rotated." > "$LOGFILE"
     fi
 
     PREFIX="📟 **Router:** $ROUTER_NAME\n"
@@ -215,18 +220,19 @@ while true; do
         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$DESC\", \"color\": 15844367}]}" "$DISCORD_URL" > /dev/null 2>&1
     fi
 
-    # Internet Check
+    # Internet Check Logic
     if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
         FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"
         if ! ping -q -c 1 -W 2 "$EXT_IP" > /dev/null 2>&1; then
             if [ ! -f "$FD" ]; then
                 echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
-                echo "$NOW_HUMAN - ⚠️ INTERNET DOWN" >> "$LOGFILE"
+                echo "$NOW_HUMAN - [ALERT] INTERNET DOWN" >> "$LOGFILE"
             fi
         else
             if [ -f "$FD" ]; then
                 S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
+                echo "$NOW_HUMAN - [SUCCESS] INTERNET UP (Down for $DR)" >> "$LOGFILE"
                 curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"$PREFIX❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Outage:** $DR$MENTION\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
                 rm -f "$FD" "$FT"
             fi
@@ -234,7 +240,7 @@ while true; do
     fi
     [ -f "/tmp/nwda_ext_d" ] && IS_INT_DOWN=1
 
-    # Local Device Check
+    # Local Device Check Logic
     if [ "$DEVICE_MONITOR" = "ON" ]; then
         while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ""|\#*) continue ;; esac
@@ -244,6 +250,7 @@ while true; do
             if ping -q -c 1 -W 2 "$TIP" > /dev/null 2>&1; then
                 if [ -f "$FD" ]; then
                     S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
+                    echo "$NOW_HUMAN - [SUCCESS] DEVICE UP: $NAME ($TIP) - Down for $DR" >> "$LOGFILE"
                     [ "$IS_INT_DOWN" -eq 0 ] && curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"✅ Device ONLINE\", \"description\": \"$PREFIX**$NAME** is back online.\n❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Down for:** $DR$MENTION\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                     rm -f "$FD" "$FT"
                 fi
@@ -252,6 +259,7 @@ while true; do
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                 if [ "$C" -eq "$FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
+                    echo "$NOW_HUMAN - [ALERT] DEVICE DOWN: $NAME ($TIP)" >> "$LOGFILE"
                     [ "$IS_INT_DOWN" -eq 0 ] && curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device DOWN!\", \"description\": \"$PREFIX**$NAME** ($TIP) is unreachable.\n**Time:** $NOW_HUMAN$MENTION\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
                 fi
             fi
@@ -262,7 +270,6 @@ done
 EOF
 
 # --- 5. ENHANCED SERVICE SETUP ---
-# Supports all standard OpenWrt commands + custom status, logs, discord
 chmod +x "$INSTALL_DIR/netwatchda.sh"
 cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
@@ -328,7 +335,7 @@ echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
 echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "${BOLD}3.${NC} Service Help:  ${BOLD}/etc/init.d/netwatchda help${NC}"
-echo -e "${BOLD}4.${NC} Discord Test:  ${BOLD}/etc/init.d/netwatchda discord${NC}"
+echo -e "${BOLD}4.${NC} View Logs:     ${BOLD}/etc/init.d/netwatchda logs${NC}"
 echo ""
 echo -e "Monitoring logs: ${BOLD}tail -f /tmp/netwatchda_log.txt${NC}"
 echo -e "${BLUE}-------------------------------------------------------${NC}\n"
