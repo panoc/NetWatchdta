@@ -189,6 +189,85 @@ tail -f /tmp/netwatchda_log.txt
 
 ---
 
+# 🚀 netwatchda: OpenWrt Discord Network Monitor
+
+A lightweight, robust, and noob-friendly network watchdog for OpenWrt. It monitors your internet connection (with dual-IP redundancy) and local network devices, sending real-time alerts directly to your Discord server via Webhooks.
+
+---
+
+## ✨ Features
+* **Dual-IP Internet Check:** Alerts only if both targets (e.g., Cloudflare and Google) are down to prevent false alarms.
+* **Device Tracking:** Monitor specific local IPs (Servers, PCs, Smart Home hubs) and get notified when they go offline.
+* **Silent Hours:** Queue notifications during the night and receive a summary in the morning.
+* **Heartbeat:** Periodic "I'm alive" messages to ensure the monitor is running.
+* **RAM Friendly:** Log rotation and temporary buffers protect your router's flash memory.
+
+---
+
+## 🛠️ Installation
+
+1. Log into your OpenWrt router via SSH.
+2. Run the installer (paste the script content provided in the setup file).
+3. Follow the interactive prompts to enter your **Discord Webhook URL** and **User ID**.
+
+---
+
+## 🖥️ LuCI Web Interface Integration (Recommended)
+
+If you prefer using the web interface over the command line, you can add control buttons to your router's dashboard.
+
+### 1. Install Custom Commands
+Navigate to **System** -> **Software**, update your lists, and install:
+`luci-app-commands`
+
+### 2. Configure Buttons
+Navigate to **System** -> **Custom Commands** and add the following entries:
+
+| Button Name | Command |
+| :--- | :--- |
+| **Check Status** | `/etc/init.d/netwatchda status` |
+| **View Activity Logs** | `/etc/init.d/netwatchda logs` |
+| **Test Discord Link** | `/etc/init.d/netwatchda discord` |
+| **Restart Service** | `/etc/init.d/netwatchda restart` |
+
+
+
+---
+
+## ⚙️ Configuration Files
+
+All configuration is stored in `/root/netwatchda/`. You can edit these files via SSH or using the "Edit" feature in LuCI's File Browser:
+
+* **`netwatchda_settings.conf`**: Main settings (Webhook URLs, timers, silent hours).
+* **`netwatchda_ips.conf`**: List of devices to monitor. 
+    * *Format:* `192.168.1.50 @ My Server`
+
+---
+
+## 📁 Management via Terminal
+
+You can manage the service manually using these commands:
+* **Start/Stop:** `/etc/init.d/netwatchda start` or `stop`
+* **Logs:** `/etc/init.d/netwatchda logs`
+* **Uninstall:** `/etc/init.d/netwatchda purge`
+
+---
+
+## 🌙 Understanding Silent Hours
+
+If you enable Silent Hours (e.g., 23:00 to 07:00):
+1.  Individual "Down/Up" alerts are **paused** during this window.
+2.  All events are saved to a temporary buffer.
+3.  At the end of the window (07:00), a single **Summary Message** is sent to Discord containing all outages that occurred overnight.
+
+---
+
+## ⚖️ License
+Copyright (C) 2025 panoc.
+This project is licensed under the **GNU General Public License v3.0**. 
+
+---
+
 ## 🗑️ Uninstallation
 
 To remove netwatchda, run the official uninstaller:
