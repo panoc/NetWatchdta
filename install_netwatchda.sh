@@ -248,12 +248,12 @@ DEV_PING_COUNT=$DEV_COUNT # Number of pings per check. Default 4.
 EOF
 
     cat <<EOF > "$IP_LIST_FILE"
-# Format: IP_ADDRESS # NAME
-# Example: 192.168.1.50 # Home Server
+# Format: IP_ADDRESS @ NAME
+# Example: 192.168.1.50 @ Home Server
 EOF
     
     LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
-    [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP # Router Gateway" >> "$IP_LIST_FILE"
+    [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
 fi
 
 # --- 4. CREATE INITIAL LOG ---
@@ -265,7 +265,7 @@ echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
 cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
 # netwatchda - Network Monitoring for OpenWrt
-# Fixed: Logging, strict IP parsing, recovery timestamps, and descriptive naming
+# Fixed: Delimiter @ and Heartbeat reporting enabled
 
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
@@ -290,6 +290,15 @@ while true; do
     NOW_HUMAN=$(date '+%b %d %H:%M:%S')
     NOW_SEC=$(date +%s)
     CUR_HOUR=$(date +%H)
+
+    # --- HEARTBEAT LOGIC ---
+    if [ "$HEARTBEAT" = "ON" ] && [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
+        LAST_HB_CHECK=$NOW_SEC
+        HB_MSG="💓 **Heartbeat Report**\n**Router:** $ROUTER_NAME\n**Status:** Systems Operational\n**Time:** $NOW_HUMAN"
+        [ "$HB_MENTION" = "ON" ] && HB_MSG="$HB_MSG\n<@$MY_ID>"
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"System Healthy\", \"description\": \"$HB_MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
+        echo "$NOW_HUMAN - [SYSTEM] [$ROUTER_NAME] Heartbeat sent." >> "$LOGFILE"
+    fi
 
     # --- SILENT MODE LOGIC ---
     IS_SILENT=0
@@ -320,7 +329,6 @@ while true; do
                 echo "$NOW_HUMAN" > "$FT"
                 echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN" >> "$LOGFILE"
                 
-                # Immediate Alert if not silent
                 if [ "$IS_SILENT" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
@@ -351,9 +359,9 @@ while true; do
     # --- DEVICE CHECK ---
     if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
-        sed -e 's/#.*//' -e '/^$/d' "$IP_LIST_FILE" | while read -r line; do
-            TIP=$(echo "$line" | awk '{print $1}')
-            NAME=$(echo "$line" | awk '{$1=""; print $0}' | sed 's/^[ \t]*//')
+        sed -e '/^#/d' -e '/^$/d' "$IP_LIST_FILE" | while read -r line; do
+            TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
+            NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
             [ -z "$NAME" ] && NAME="$TIP"
             [ -z "$TIP" ] && continue
             
@@ -365,7 +373,7 @@ while true; do
                     DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$((NOW_SEC-DSSEC))
                     DR_STR="$((DUR/60))m $((DUR%60))s"
                     D_MSG="✅ **$NAME Online**\n**Router:** $ROUTER_NAME\n**Down at:** $DSTART\n**Up at:** $NOW_HUMAN\n**Outage:** $DR_STR"
-                    echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] $NAME ONLINE ($DR_STR)" >> "$LOGFILE"
+                    echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] Device: $NAME Online (Down $DR_STR)" >> "$LOGFILE"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$D_MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
@@ -379,7 +387,7 @@ while true; do
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                 if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
-                    echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] $NAME DOWN" >> "$LOGFILE"
+                    echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] Device: $NAME Down" >> "$LOGFILE"
                     if [ "$IS_SILENT" -eq 0 ]; then
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $NOW_HUMAN\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
@@ -452,11 +460,11 @@ curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\"
 # --- FINAL OUTPUT ---
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete! Script file deleted.${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete! Delimiter is now '@'.${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
-echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
+echo -e "${BOLD}2.${NC} Update IP List with @:  ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "${BOLD}3.${NC} Restart Service:${BOLD} /etc/init.d/netwatchda restart${NC}"
 echo ""
