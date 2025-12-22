@@ -45,15 +45,20 @@ LOGFILE="/tmp/netwatchda_log.txt"
 
 # --- 1. CHECK DEPENDENCIES ---
 echo -e "\n${BOLD}📦 Checking dependencies...${NC}"
-if ! command -v curl >/dev/null 2>&1; then
-    echo -e "${YELLOW}📥 curl not found. Attempting to install...${NC}"
-    opkg update && opkg install curl ca-bundle
+# Check for curl and luci-app-commands
+pkgs_to_install=""
+command -v curl >/dev/null 2>&1 || pkgs_to_install="curl ca-bundle"
+[ ! -d "/usr/lib/lua/luci/controller/commands.lua" ] && [ ! -f "/usr/lib/lua/luci/model/cbi/commands.lua" ] && pkgs_to_install="$pkgs_to_install luci-app-commands"
+
+if [ -n "$pkgs_to_install" ]; then
+    echo -e "${YELLOW}📥 Installing required packages: $pkgs_to_install...${NC}"
+    opkg update && opkg install $pkgs_to_install
     if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Error: Failed to install curl. Aborting.${NC}"
+        echo -e "${RED}❌ Error: Failed to install dependencies. Aborting.${NC}"
         exit 1
     fi
 fi
-echo -e "${GREEN}✅ curl is ready.${NC}"
+echo -e "${GREEN}✅ Dependencies are ready.${NC}"
 
 # --- 2. SMART UPGRADE / INSTALL CHECK ---
 KEEP_CONFIG=0
@@ -179,7 +184,6 @@ EOF
 fi
 
 # --- 4. CREATE INITIAL HUMAN-READABLE LOG ---
-# Create the file before the core script runs to ensure the 'logs' command works immediately
 NOW_LOG=$(date '+%b %d, %Y %H:%M:%S')
 echo "$NOW_LOG - [SYSTEM] netwatchda installation successful. Service is ready to monitor." > "$LOGFILE"
 
@@ -324,9 +328,34 @@ EOF
 chmod +x "$SERVICE_PATH"
 "$SERVICE_PATH" enable
 "$SERVICE_PATH" restart
-echo -e "${GREEN}✅ Service configured and started.${NC}"
 
-# --- 7. SUCCESS NOTIFICATION ---
+# --- 7. AUTOMATED LUCI COMMANDS SETUP ---
+echo -e "${CYAN}🎨 Configuring LuCI Custom Commands...${NC}"
+# Clear existing netwatchda entries from luci_commands to avoid duplicates
+while uci -q delete luci_commands.@command[0] >/dev/null 2>&1; do :; done 2>/dev/null
+
+# Add new commands to LuCI
+uci batch <<EOF
+    add luci_commands command
+    set luci_commands.@command[-1].label='NWDA: View Logs'
+    set luci_commands.@command[-1].command='/etc/init.d/netwatchda logs'
+    
+    add luci_commands command
+    set luci_commands.@command[-1].label='NWDA: Service Status'
+    set luci_commands.@command[-1].command='/etc/init.d/netwatchda status'
+    
+    add luci_commands command
+    set luci_commands.@command[-1].label='NWDA: Test Discord'
+    set luci_commands.@command[-1].command='/etc/init.d/netwatchda discord'
+    
+    add luci_commands command
+    set luci_commands.@command[-1].label='NWDA: Restart Service'
+    set luci_commands.@command[-1].command='/etc/init.d/netwatchda restart'
+    commit luci_commands
+EOF
+echo -e "${GREEN}✅ LuCI commands added successfully.${NC}"
+
+# --- 8. SUCCESS NOTIFICATION ---
 . "$CONFIG_FILE"
 NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_FINAL\nMonitoring is active.\", \"color\": 3447003}]}" "$DISCORD_URL" > /dev/null
@@ -339,9 +368,8 @@ echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
-echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
-echo -e "${BOLD}3.${NC} Service Help:  ${BOLD}/etc/init.d/netwatchda help${NC}"
-echo -e "${BOLD}4.${NC} View Logs:     ${BOLD}/etc/init.d/netwatchda logs${NC}"
+echo -e "${BOLD}2.${NC} Web Interface: ${CYAN}Go to LuCI -> System -> Custom Commands${NC}"
+echo -e "${BOLD}3.${NC} View Logs:     ${BOLD}/etc/init.d/netwatchda logs${NC}"
 echo ""
 echo -e "Monitoring logs: ${BOLD}tail -f /tmp/netwatchda_log.txt${NC}"
 echo -e "${BLUE}-------------------------------------------------------${NC}\n"
