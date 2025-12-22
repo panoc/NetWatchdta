@@ -115,6 +115,7 @@ if [ -f "$CONFIG_FILE" ]; then
         add_if_missing "EXT_SCAN_INTERVAL" "60" "# Seconds between internet checks. Default is 60."
         add_if_missing "EXT_FAIL_THRESHOLD" "1" "# Failed cycles before alert. Default 1."
         add_if_missing "EXT_IP" "\"1.1.1.1\"" "# External IP to ping. Leave empty to disable."
+        add_if_missing "EXT_IP2" "\"8.8.8.8\"" "# Secondary External IP for redundancy."
         add_if_missing "DEVICE_MONITOR" "\"ON\"" "# Set to ON to enable local IP monitoring."
         add_if_missing "DEV_PING_COUNT" "4" "# Number of pings per device check interval. Default 4."
         add_if_missing "DEV_SCAN_INTERVAL" "10" "# Seconds between device pings. Default is 10."
@@ -237,6 +238,7 @@ HB_MENTION="$HB_MENTION" # Set to ON to include @mention in heartbeats.
 
 [Internet Connectivity]
 EXT_IP="$EXT_VAL" # External IP to ping. Leave empty to disable.
+EXT_IP2="8.8.8.8" # Secondary External IP for redundancy.
 EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
 EXT_FAIL_THRESHOLD=1 # Number of failed checks before alert. Default 1.
 EXT_PING_COUNT=$EXT_COUNT # Number of pings per check. Default 4.
@@ -301,7 +303,8 @@ All files are located in: /root/netwatchda/
 - HB_MENTION: (ON/OFF) Choose if the heartbeat should ping your @ID.
 
 [Internet Connectivity]
-- EXT_IP: The target to ping (e.g., 1.1.1.1). Leave empty to disable.
+- EXT_IP: The primary target to ping.
+- EXT_IP2: The secondary target to ping for redundancy.
 - EXT_SCAN_INTERVAL: Seconds between internet checks (Default 60).
 - EXT_FAIL_THRESHOLD: Failed checks needed to trigger a "Down" alert.
 - EXT_PING_COUNT: Number of packets sent per check (Default 4).
@@ -390,16 +393,24 @@ while true; do
         [ $? -eq 0 ] && > "$SILENT_BUFFER"
     fi
 
-    # --- INTERNET CHECK ---
-    if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
+    # --- INTERNET CHECK (Dual IP Logic) ---
+    if { [ -n "$EXT_IP" ] || [ -n "$EXT_IP2" ]; } && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
         FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"; FC="/tmp/nwda_ext_c"
-        if ! ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP" > /dev/null 2>&1; then
+        
+        EXT_UP=0
+        if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP" > /dev/null 2>&1; then
+            EXT_UP=1
+        elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP2" > /dev/null 2>&1; then
+            EXT_UP=1
+        fi
+
+        if [ "$EXT_UP" -eq 0 ]; then
             C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
             if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                 echo "$NOW_SEC" > "$FD"
                 echo "$NOW_HUMAN" > "$FT"
-                echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN (Target: $EXT_IP)" >> "$LOGFILE"
+                echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN (Targets: $EXT_IP / $EXT_IP2)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
@@ -415,7 +426,7 @@ while true; do
                 DR="$((DURATION_SEC/60))m $((DURATION_SEC%60))s"
                 
                 MSG="🌐 **Internet Restored**\n**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
-                echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] INTERNET UP (Target: $EXT_IP | Down $DR)" >> "$LOGFILE"
+                echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"Connectivity Restored\", \"description\": \"$MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
