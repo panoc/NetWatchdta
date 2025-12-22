@@ -147,7 +147,27 @@ Restart the service after making changes:
 
 ```sh
 /etc/init.d/netwatchda restart
-```
+``
+
+---
+
+## 🖥️ LuCI Web Interface Integration (Recommended)
+
+If you prefer using the web interface over the command line, you can add control buttons to your router's dashboard.
+
+### 1. Install Custom Commands
+Navigate to **System** -> **Software**, update your lists, and install:
+`luci-app-commands`
+
+### 2. Configure Buttons
+Navigate to **System** -> **Custom Commands** and add the following entries:
+
+| Button Name | Command |
+| :--- | :--- |
+| **Check Status** | `/etc/init.d/netwatchda status` |
+| **View Activity Logs** | `/etc/init.d/netwatchda logs` |
+| **Test Discord Link** | `/etc/init.d/netwatchda discord` |
+| **Restart Service** | `/etc/init.d/netwatchda restart` |
 
 ---
 
@@ -186,30 +206,6 @@ Follow connectivity logs in real time:
 ```sh
 tail -f /tmp/netwatchda_log.txt
 ```
-
----
-
-## 🖥️ LuCI Web Interface Integration (Recommended)
-
-If you prefer using the web interface over the command line, you can add control buttons to your router's dashboard.
-
-### 1. Install Custom Commands
-Navigate to **System** -> **Software**, update your lists, and install:
-`luci-app-commands`
-
-### 2. Configure Buttons
-Navigate to **System** -> **Custom Commands** and add the following entries:
-
-| Button Name | Command |
-| :--- | :--- |
-| **Check Status** | `/etc/init.d/netwatchda status` |
-| **View Activity Logs** | `/etc/init.d/netwatchda logs` |
-| **Test Discord Link** | `/etc/init.d/netwatchda discord` |
-| **Restart Service** | `/etc/init.d/netwatchda restart` |
-
-
-
----
 
 ## ⚙️ Configuration Files
 
