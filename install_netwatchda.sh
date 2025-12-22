@@ -3,14 +3,14 @@
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
 
-# --- COLOR DEFINITIONS ---
-NC='\033[0m'       # No Color
+# --- COLOR DEFINITIONS (VIBRANT & HIGH CONTRAST) ---
+NC='\033[0m'       
 BOLD='\033[1m'
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
+RED='\033[1;31m'    # Light Red (High Visibility)
+GREEN='\033[1;32m'  # Light Green
+BLUE='\033[1;34m'   # Light Blue
+CYAN='\033[1;36m'   # Light Cyan
+YELLOW='\033[1;33m' # Bold Yellow
 
 # --- INITIAL SPACING ---
 echo -e "${BLUE}=======================================================${NC}"

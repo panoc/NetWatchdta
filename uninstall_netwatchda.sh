@@ -1,15 +1,14 @@
 #!/bin/sh
 # netwatchda Uninstaller - Automated Removal for OpenWrt
 # Copyright (C) 2025 panoc
-# Licensed under the GNU General Public License v3.0
 
-# --- COLOR DEFINITIONS ---
-NC='\033[0m'       # No Color
+# --- COLOR DEFINITIONS (VIBRANT & HIGH CONTRAST) ---
+NC='\033[0m'
 BOLD='\033[1m'
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+CYAN='\033[1;36m'
 YELLOW='\033[1;33m'
 
 # --- INITIAL SPACING ---
@@ -32,22 +31,12 @@ if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
     read choice </dev/tty
 
     case "$choice" in
-        3)
-            echo -e "\n${BLUE}❌ Uninstallation cancelled.${NC}"
-            echo ""
-            exit 0
-            ;;
-        2)
-            KEEP_CONF=1
-            echo -e "\n${YELLOW}📂 Preservation Mode: Configuration files will be kept.${NC}"
-            ;;
-        *)
-            KEEP_CONF=0
-            echo -e "\n${RED}🗑️  Full Uninstall: All files and settings will be deleted.${NC}"
-            ;;
+        3) echo -e "\n${BLUE}❌ Uninstallation cancelled.${NC}"; echo ""; exit 0 ;;
+        2) KEEP_CONF=1; echo -e "\n${YELLOW}📂 Preservation Mode active.${NC}" ;;
+        *) KEEP_CONF=0; echo -e "\n${RED}🗑️  Full Uninstall active.${NC}" ;;
     esac
 else
-    echo -e "\n${CYAN}ℹ️  No installation found at $INSTALL_DIR. Nothing to do.${NC}"
+    echo -e "\n${CYAN}ℹ️  No installation found.${NC}"
     exit 1
 fi
 
@@ -56,14 +45,9 @@ if [ -f "$SERVICE_PATH" ]; then
     echo -e "\n${CYAN}🛑 Stopping and disabling service...${NC}"
     $SERVICE_PATH stop 2>/dev/null
     $SERVICE_PATH disable 2>/dev/null
-    
-    # Sniper Kill: Kill background script but NOT this uninstaller ($$)
     TARGET_PID=$(pgrep -f "netwatchda.sh" | grep -v "$$")
     [ -n "$TARGET_PID" ] && kill -9 $TARGET_PID 2>/dev/null
-    
-    # Cleanup orphaned pings
     killall -q ping 2>/dev/null 
-
     rm -f "$SERVICE_PATH"
     echo -e "${GREEN}✅ Service removed.${NC}"
 fi
@@ -75,31 +59,18 @@ echo -e "${GREEN}✅ Temp files cleared.${NC}"
 
 # --- 4. REMOVE INSTALLATION FILES ---
 if [ "$KEEP_CONF" -eq 1 ]; then
-    # Specifically remove only the core logic script
-    if [ -f "$INSTALL_DIR/netwatchda.sh" ]; then
-        rm -f "$INSTALL_DIR/netwatchda.sh"
-        echo -e "${GREEN}✅ Core script removed.${NC}"
-    fi
+    [ -f "$INSTALL_DIR/netwatchda.sh" ] && rm -f "$INSTALL_DIR/netwatchda.sh"
     echo -e "${YELLOW}📂 Configuration preserved in $INSTALL_DIR${NC}"
 else
     if [ -d "$INSTALL_DIR" ]; then
         echo -e "${RED}🗑️  Removing directory $INSTALL_DIR...${NC}"
         rm -rf "$INSTALL_DIR"
-        
-        # Verification check
-        if [ -d "$INSTALL_DIR" ]; then
-            echo -e "${BOLD}${RED}❌ ERROR: Could not remove directory. Filesystem might be Read-Only!${NC}"
-        else
-            echo -e "${GREEN}✅ All files removed.${NC}"
-        fi
+        [ -d "$INSTALL_DIR" ] && echo -e "${RED}❌ ERROR: Dir could not be removed!${NC}" || echo -e "${GREEN}✅ All files removed.${NC}"
     fi
 fi
 
 # --- 5. FINAL CLEANUP ---
-# The script deletes itself
 rm -- "$0"
-
 echo -e "\n${GREEN}---${NC}"
 echo -e "${BOLD}${GREEN}✨ Uninstallation complete!${NC}"
-echo -e "${RED}-------------------------------------------------------${NC}"
-echo ""
+echo -e "${RED}-------------------------------------------------------${NC}\n"
