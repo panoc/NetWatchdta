@@ -31,7 +31,7 @@ echo ""
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
 printf "${BOLD}❓ This will begin the installation process. Continue? [y/n]: ${NC}"
 read start_confirm </dev/tty
-if [ "$start_confirm" != "y" ] && [ "$confirm_test" != "Y" ]; then
+if [ "$start_confirm" != "y" ] && [ "$start_confirm" != "Y" ]; then
     echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
 fi
@@ -106,17 +106,18 @@ if [ -f "$CONFIG_FILE" ]; then
         add_if_missing "ROUTER_NAME" "\"My_OpenWrt_Router\"" "# Name that appears in Discord notifications."
         add_if_missing "DISCORD_URL" "\"\"" "# Your Discord Webhook URL."
         add_if_missing "MY_ID" "\"\"" "# Your Discord User ID (for @mentions)."
-        add_if_missing "SCAN_INTERVAL" "10" "# Seconds between pings. Default is 10."
-        add_if_missing "FAIL_THRESHOLD" "3" "# Number of failed pings before sending an alert. Default is 3."
         add_if_missing "MAX_SIZE" "$DEFAULT_MAX_LOG" "# Max log file size in bytes for the log rotation."
         add_if_missing "HEARTBEAT" "\"OFF\"" "# Set to ON to receive a periodic check-in message."
         add_if_missing "HB_INTERVAL" "86400" "# Interval in seconds. Default is 86400"
         add_if_missing "HB_MENTION" "\"OFF\"" "# Set to ON to include @mention in heartbeats."
         add_if_missing "EXT_PING_COUNT" "4" "# Number of pings per internet check interval. Default 4."
-        add_if_missing "DEV_PING_COUNT" "4" "# Number of pings per device check interval. Default 4."
+        add_if_missing "EXT_SCAN_INTERVAL" "60" "# Seconds between internet checks. Default is 60."
+        add_if_missing "EXT_FAIL_THRESHOLD" "1" "# Failed cycles before alert. Default 1."
         add_if_missing "EXT_IP" "\"1.1.1.1\"" "# External IP to ping. Leave empty to disable."
-        add_if_missing "EXT_INTERVAL" "60" "# Seconds between internet checks. Default is 60."
         add_if_missing "DEVICE_MONITOR" "\"ON\"" "# Set to ON to enable local IP monitoring."
+        add_if_missing "DEV_PING_COUNT" "4" "# Number of pings per device check interval. Default 4."
+        add_if_missing "DEV_SCAN_INTERVAL" "10" "# Seconds between device pings. Default is 10."
+        add_if_missing "DEV_FAIL_THRESHOLD" "3" "# Failed cycles before alert. Default 3."
 
         echo -e "${GREEN}✅ Configuration patch complete.${NC}"
         KEEP_CONFIG=1
@@ -192,8 +193,6 @@ DISCORD_URL="$user_webhook" # Your Discord Webhook URL.
 MY_ID="$user_id" # Your Discord User ID (for @mentions).
 
 [Monitoring Settings]
-SCAN_INTERVAL=10 # Seconds between pings. Default is 10.
-FAIL_THRESHOLD=3 # Number of failed pings before sending an alert. Default is 3.
 MAX_SIZE=$DEFAULT_MAX_LOG # Max log file size in bytes for the log rotation.
 
 [Heartbeat Settings]
@@ -202,13 +201,16 @@ HB_INTERVAL=$HB_SEC # Interval in seconds. Default is 86400
 HB_MENTION="$HB_MENTION" # Set to ON to include @mention in heartbeats.
 
 [Internet Connectivity]
-EXT_PING_COUNT=$EXT_COUNT # Number of pings per internet check interval. Default 4.
 EXT_IP="$EXT_VAL" # External IP to ping. Leave empty to disable.
-EXT_INTERVAL=60 # Seconds between internet checks. Default is 60.
+EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
+EXT_FAIL_THRESHOLD=1 # Number of failed checks before alert. Default 1.
+EXT_PING_COUNT=$EXT_COUNT # Number of pings per check. Default 4.
 
 [Local Device Monitoring]
 DEVICE_MONITOR="$DEV_VAL" # Set to ON to enable local IP monitoring.
-DEV_PING_COUNT=$DEV_COUNT # Number of pings per device check interval. Default 4.
+DEV_SCAN_INTERVAL=10 # Seconds between device pings. Default is 10.
+DEV_FAIL_THRESHOLD=3 # Number of failed pings before alert. Default 3.
+DEV_PING_COUNT=$DEV_COUNT # Number of pings per check. Default 4.
 EOF
 
     cat <<EOF > "$IP_LIST_FILE"
@@ -236,6 +238,7 @@ IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
 CONFIG_FILE="$BASE_DIR/netwatchda_settings.conf"
 LOGFILE="/tmp/netwatchda_log.txt"
 LAST_EXT_CHECK=0
+LAST_DEV_CHECK=0
 LAST_HB_CHECK=$(date +%s)
 
 while true; do
@@ -266,11 +269,12 @@ while true; do
     fi
 
     # Internet Check Logic
-    if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_INTERVAL" ]; then
+    if [ -n "$EXT_IP" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
-        FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"
+        FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"; FC="/tmp/nwda_ext_c"
         if ! ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP" > /dev/null 2>&1; then
-            if [ ! -f "$FD" ]; then
+            C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+            if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                 echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                 echo "$NOW_HUMAN - [ALERT] INTERNET DOWN" >> "$LOGFILE"
             fi
@@ -281,12 +285,14 @@ while true; do
                 curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"$PREFIX❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Outage:** $DR$MENTION\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
                 rm -f "$FD" "$FT"
             fi
+            echo 0 > "$FC"
         fi
     fi
     [ -f "/tmp/nwda_ext_d" ] && IS_INT_DOWN=1
 
     # Local Device Check Logic
-    if [ "$DEVICE_MONITOR" = "ON" ]; then
+    if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
+        LAST_DEV_CHECK=$NOW_SEC
         while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ""|\#*) continue ;; esac
             TIP=$(echo "$line" | cut -d'#' -f1 | xargs); NAME=$(echo "$line" | cut -s -d'#' -f2- | xargs)
@@ -302,7 +308,7 @@ while true; do
                 echo 0 > "$FC"
             else
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
-                if [ "$C" -eq "$FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
+                if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                     echo "$NOW_HUMAN - [ALERT] DEVICE DOWN: $NAME ($TIP)" >> "$LOGFILE"
                     [ "$IS_INT_DOWN" -eq 0 ] && curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device DOWN!\", \"description\": \"$PREFIX**$NAME** ($TIP) unreachable.\n**Time:** $NOW_HUMAN$MENTION\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
@@ -310,7 +316,7 @@ while true; do
             fi
         done < "$IP_LIST_FILE"
     fi
-    sleep "$SCAN_INTERVAL"
+    sleep 1
 done
 EOF
 
