@@ -357,13 +357,17 @@ while true; do
     fi
     [ -f "/tmp/nwda_ext_d" ] && IS_INT_DOWN=1
 
-    # Local Device Check Logic
+    # Local Device Check Logic (STRICT PARSING)
     if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
-        while IFS= read -r line || [ -n "$line" ]; do
+        # Only process lines starting with a number to ignore stray 'y/n' artifacts
+        grep -E '^[0-9]' "$IP_LIST_FILE" | while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ""|\#*) continue ;; esac
-            TIP=$(echo "$line" | cut -d'#' -f1 | xargs); NAME=$(echo "$line" | cut -s -d'#' -f2- | xargs)
+            TIP=$(echo "$line" | cut -d'#' -f1 | tr -d ' \t\r\n')
+            NAME=$(echo "$line" | cut -s -d'#' -f2- | sed 's/^[ \t]*//;s/[ \t]*$//')
             [ -z "$NAME" ] && NAME="Unknown"
+            [ -z "$TIP" ] && continue
+            
             SIP=$(echo "$TIP" | tr '.' '_'); FC="/tmp/nwda_c_$SIP"; FD="/tmp/nwda_d_$SIP"; FT="/tmp/nwda_t_$SIP"
             if ping -q -c "$DEV_PING_COUNT" -W 2 "$TIP" > /dev/null 2>&1; then
                 if [ -f "$FD" ]; then
@@ -393,7 +397,7 @@ while true; do
                     fi
                 fi
             fi
-        done < "$IP_LIST_FILE"
+        done
     fi
     sleep 1
 done
