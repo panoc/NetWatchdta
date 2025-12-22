@@ -49,7 +49,7 @@ If you want the router to "ping" you (send a notification to your phone/PC) when
 
 ---
 > [!TIP]
-> During netwatchda installation you will be asked for the above, copy-paste them. If you know have them leave blanck and you can change them later in `netwatchda_config.conf`
+> During netwatchda installation you will be asked for the above, copy-paste them. If you do not have them leave blanck and you can change them later in `netwatchda_config.conf`
 
 ---
 
