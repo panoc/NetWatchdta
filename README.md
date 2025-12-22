@@ -9,7 +9,7 @@ Designed for easy installation, reliability, minimal resource usage, and zero bl
 
 ## ✨ Features
 
-- **Real-Time Discord Alerts**: Get notified instantly when a local device (Server, PC, IoT) or your entire Internet connection goes down.
+- **Real-Time Discord Alerts**: Get notified instantly when a local device (Server, PC, IoT) or your entire Internet connection goes down. Silent hours supported.
 - **Smart Recovery Notifications**: Not only tells you when things break but also calculates exactly how long the outage lasted once the connection returns.
 - **System Heartbeat**: Optional periodic "I'm alive" messages so you know your router hasn't frozen or lost power.
 - **Zero-Touch Management**: Includes a comprehensive automated installer and a "bulletproof" uninstaller.
