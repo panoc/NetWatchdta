@@ -217,11 +217,30 @@ All configuration is stored in `/root/netwatchda/`. You can edit these files via
 ---
 
 ## 📁 Management via Terminal
-
-You can manage the service manually using these commands:
-* **Start/Stop:** `/etc/init.d/netwatchda start` or `stop`
-* **Logs:** `/etc/init.d/netwatchda logs`
-* **Uninstall:** `/etc/init.d/netwatchda purge`
+**You can manage the service manually using these commands:**
+<details>
+<summary><strong>Usage: /etc/init.d/netwatchda</strong> [command]</summary>
+<pre>
+  
+-	start          - Start the service
+- stop           - Stop the service
+- restart        - Restart the service
+- reload         - Reload configuration files (or restart if service does not implement reload)
+- enable         - Enable service autostart
+- disable        - Disable service autostart
+- enabled        - Check if service is started on boot
+- status         - Check if monitor is running
+- logs           - View last 20 log entries
+- clear          - Clear log file
+- discord        - Test discord notification
+- purge          - Interactive smart uninstaller
+- running        - Check if service is running
+- status         - Service status
+- trace          - Start with syscall trace
+- info           - Dump procd service info
+- help			     - Display this help message
+  </pre>
+</details>
 
 ---
 
@@ -258,32 +277,7 @@ You will be prompted to:
 - Or perform a full cleanup
 
 ---
-
-## ⚙️ Service Management
-<details>
-<summary>Usage: /etc/init.d/netwatchda [command]</summary>
-<pre>
-  
--	start          -  Start the service
-- stop           - Stop the service
-- restart        - Restart the service
-- reload         - Reload configuration files (or restart if service does not implement reload)
-- enable         - Enable service autostart
-- disable        - Disable service autostart
-- enabled        - Check if service is started on boot
-- status         - Check if monitor is running
-- logs           - View last 20 log entries
-- clear          - Clear log file
-- discord        - Test discord notification
-- purge          - Interactive smart uninstaller
-- running        - Check if service is running
-- status         - Service status
-- trace          - Start with syscall trace
-- info           - Dump procd service info
-- help			     - Display this help message
-  </pre>
-</details>
-  
+ 
 ## 🤝 Contributing
 
 Contributions are welcome.  
