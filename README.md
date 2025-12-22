@@ -34,7 +34,8 @@ The script itself is tiny (only a few KB), but it relies on curl to communicate 
 
 Combined, these packages require approximately 1.5MB to 2.2MB of permanent space. We set the guard at 3MB to allow room for the opkg package manager to download temporary files during installation without hitting 100% utilization.
 Run the following command in your OpenWrt router’s terminal.  
-The installer is interactive and will guide you through setup.
+
+**The installer is interactive and will guide you through setup.**
 
 ```sh
 wget --no-check-certificate -qO /tmp/install_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatch-Discord-Alerts-for-OpenWRT/refs/heads/main/install_netwatchda.sh" && sh /tmp/install_netwatchda.sh
