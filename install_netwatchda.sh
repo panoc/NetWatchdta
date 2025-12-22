@@ -22,6 +22,7 @@ CYAN='\033[1;36m'   # Light Cyan (Vibrant)
 YELLOW='\033[1;33m' # Bold Yellow
 
 # --- INITIAL HEADER ---
+clear
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
@@ -332,8 +333,8 @@ discord() {
     if [ -f "$CONFIG_FILE" ]; then
         . "$CONFIG_FILE"
         NOW=\$(date '+%b %d, %Y %H:%M:%S')
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Test\", \"description\": \"Manual test triggered.\", \"color\": 3447003}]}" "\$DISCORD_URL"
-        echo "Test sent."
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Test\", \"description\": \"**Router:** \$ROUTER_NAME\n**Time:** \$NOW\nManual test triggered from CLI.\", \"color\": 3447003}]}" "\$DISCORD_URL"
+        echo "Test message sent to Discord."
     fi
 }
 EOF
@@ -341,37 +342,50 @@ chmod +x "$SERVICE_PATH"
 "$SERVICE_PATH" enable
 "$SERVICE_PATH" restart
 
-# --- 7. LUCI COMMANDS & REFRESH ---
-echo -e "${CYAN}🎨 Injecting LuCI Commands and Refreshing Cache...${NC}"
-while uci -q delete luci_commands.@command[0]; do :; done
+# --- 7. LUCI COMMANDS INJECTION & REFRESH ---
+echo -e "${CYAN}🎨 Updating LuCI Custom Commands...${NC}"
+
+# Delete existing entries safely to avoid "Entry not found" errors
+while uci -q get luci_commands.@command[0] >/dev/null 2>&1; do
+    uci -q delete luci_commands.@command[0]
+done
+
+# Add new entries
 uci batch <<EOF
     add luci_commands command
     set luci_commands.@command[-1].label='NWDA: View Logs'
     set luci_commands.@command[-1].command='/etc/init.d/netwatchda logs'
+    
     add luci_commands command
     set luci_commands.@command[-1].label='NWDA: Service Status'
     set luci_commands.@command[-1].command='/etc/init.d/netwatchda status'
+    
     add luci_commands command
     set luci_commands.@command[-1].label='NWDA: Test Discord'
     set luci_commands.@command[-1].command='/etc/init.d/netwatchda discord'
+    
     add luci_commands command
     set luci_commands.@command[-1].label='NWDA: Restart Service'
     set luci_commands.@command[-1].command='/etc/init.d/netwatchda restart'
     commit luci_commands
 EOF
+
+# Force LuCI refresh by clearing index cache and restarting uhttpd
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
-/etc/init.d/uhttpd restart
+/etc/init.d/uhttpd restart > /dev/null 2>&1
 
 # --- FINAL OUTPUT ---
+sleep 1
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete! Script file deleted.${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
 echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "${BOLD}3.${NC} Web UI:        ${BOLD}System -> Custom Commands${NC}"
+echo -e "${BOLD}4.${NC} View Logs:     ${BOLD}/etc/init.d/netwatchda logs${NC}"
 echo ""
 echo -e "Monitoring logs: ${BOLD}tail -f /tmp/netwatchda_log.txt${NC}"
 echo -e "${BLUE}-------------------------------------------------------${NC}\n"
