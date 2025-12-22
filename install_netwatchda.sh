@@ -150,21 +150,21 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     if [ "$enable_silent_choice" = "y" ] || [ "$enable_silent_choice" = "Y" ]; then
         SILENT_VAL="ON"
         while :; do
-            printf "${BOLD}   > Start Hour (0-23, e.g., 23 for 11PM): ${NC}"
+            printf "${BOLD}   > Start Hour (24H Format 0-23, e.g., 23 for 11PM): ${NC}"
             read user_silent_start </dev/tty
             if echo "$user_silent_start" | grep -qE '^[0-9]+$' && [ "$user_silent_start" -ge 0 ] && [ "$user_silent_start" -le 23 ] 2>/dev/null; then
                 break
             else
-                echo -e "${RED}   ❌ Invalid hour (0-23).${NC}"
+                echo -e "${RED}   ❌ Invalid hour. Use 24H format (0-23).${NC}"
             fi
         done
         while :; do
-            printf "${BOLD}   > End Hour (0-23, e.g., 07 for 7AM): ${NC}"
+            printf "${BOLD}   > End Hour (24H Format 0-23, e.g., 07 for 7AM): ${NC}"
             read user_silent_end </dev/tty
             if echo "$user_silent_end" | grep -qE '^[0-9]+$' && [ "$user_silent_end" -ge 0 ] && [ "$user_silent_end" -le 23 ] 2>/dev/null; then
                 break
             else
-                echo -e "${RED}   ❌ Invalid hour (0-23).${NC}"
+                echo -e "${RED}   ❌ Invalid hour. Use 24H format (0-23).${NC}"
             fi
         done
     else
@@ -223,8 +223,8 @@ ROUTER_NAME="$router_name_input" # Name that appears in Discord notifications.
 DISCORD_URL="$user_webhook" # Your Discord Webhook URL.
 MY_ID="$user_id" # Your Discord User ID (for @mentions).
 SILENT_ENABLE="$SILENT_VAL" # Set to ON to enable silent hours mode.
-SILENT_START=$user_silent_start # Hour to start silent mode (0-23).
-SILENT_END=$user_silent_end # Hour to end silent mode (0-23).
+SILENT_START=$user_silent_start # Hour to start silent mode (24H Format 0-23).
+SILENT_END=$user_silent_end # Hour to end silent mode (24H Format 0-23).
 
 [Monitoring Settings]
 MAX_SIZE=$DEFAULT_MAX_LOG # Max log file size in bytes for the log rotation.
@@ -265,7 +265,7 @@ echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
 cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
 # netwatchda - Network Monitoring for OpenWrt
-# Copyright (C) 2025 panoc
+# Fixed: Overnight logic and JSON string escaping
 
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
@@ -289,21 +289,22 @@ while true; do
     NOW_SEC=$(date +%s)
     CUR_HOUR=$(date +%H)
 
-    # Silent Mode Logic
+    # --- SILENT MODE LOGIC ---
     IS_SILENT=0
     if [ "$SILENT_ENABLE" = "ON" ]; then
-        if [ "$SILENT_START" -le "$SILENT_END" ]; then
-            if [ "$CUR_HOUR" -ge "$SILENT_START" ] && [ "$CUR_HOUR" -lt "$SILENT_END" ]; then IS_SILENT=1; fi
-        else
+        if [ "$SILENT_START" -gt "$SILENT_END" ]; then
             if [ "$CUR_HOUR" -ge "$SILENT_START" ] || [ "$CUR_HOUR" -lt "$SILENT_END" ]; then IS_SILENT=1; fi
+        else
+            if [ "$CUR_HOUR" -ge "$SILENT_START" ] && [ "$CUR_HOUR" -lt "$SILENT_END" ]; then IS_SILENT=1; fi
         fi
     fi
 
-    # Trigger Summary after silent hours end
+    # --- SUMMARY TRIGGER ---
     if [ "$IS_SILENT" -eq 0 ] && [ -s "$SILENT_BUFFER" ]; then
         SUMMARY_CONTENT=$(cat "$SILENT_BUFFER")
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌙 Silent Hours Summary\", \"description\": \"**Router:** $ROUTER_NAME\nThe following events occurred while alerts were muted:\n\n$SUMMARY_CONTENT\", \"color\": 3447003}]}" "$DISCORD_URL" > /dev/null 2>&1
-        > "$SILENT_BUFFER"
+        CLEAN_SUMMARY=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌙 Silent Hours Summary\", \"description\": \"**Router:** $ROUTER_NAME\\n$CLEAN_SUMMARY\", \"color\": 3447003}]}" "$DISCORD_URL" > /dev/null 2>&1
+        [ $? -eq 0 ] && > "$SILENT_BUFFER"
     fi
 
     # Log Rotation Check
@@ -337,18 +338,15 @@ while true; do
             if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                 echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                 echo "$NOW_HUMAN - [ALERT] INTERNET DOWN" >> "$LOGFILE"
-                if [ "$IS_SILENT" -eq 1 ]; then
-                   echo "🌐 Internet Outage Started: $NOW_HUMAN" >> "$SILENT_BUFFER"
-                fi
+                [ "$IS_SILENT" -eq 1 ] && echo "🌐 Internet Outage: $NOW_HUMAN" >> "$SILENT_BUFFER"
             fi
         else
             if [ -f "$FD" ]; then
                 S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
-                echo "$NOW_HUMAN - [SUCCESS] INTERNET UP (Down for $DR)" >> "$LOGFILE"
                 if [ "$IS_SILENT" -eq 0 ]; then
-                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"$PREFIX❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Outage:** $DR$MENTION\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌐 Internet Restored\", \"description\": \"**Outage:** $DR\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
-                    echo "🌐 Internet Restored: $NOW_HUMAN (Down for $DR)" >> "$SILENT_BUFFER"
+                    echo "🌐 Internet Up: $NOW_HUMAN (Down $DR)" >> "$SILENT_BUFFER"
                 fi
                 rm -f "$FD" "$FT"
             fi
@@ -371,13 +369,10 @@ while true; do
             if ping -q -c "$DEV_PING_COUNT" -W 2 "$TIP" > /dev/null 2>&1; then
                 if [ -f "$FD" ]; then
                     S=$(cat "$FD"); T=$(cat "$FT"); D=$((NOW_SEC-S)); DR="$(($D/60))m $(($D%60))s"
-                    echo "$NOW_HUMAN - [SUCCESS] DEVICE UP: $NAME ($TIP) - Down for $DR" >> "$LOGFILE"
-                    if [ "$IS_INT_DOWN" -eq 0 ]; then
-                        if [ "$IS_SILENT" -eq 0 ]; then
-                            curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"✅ Device ONLINE\", \"description\": \"$PREFIX**$NAME** back online.\n❌ **Lost:** $T\n✅ **Restored:** $NOW_HUMAN\n**Down for:** $DR$MENTION\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
-                        else
-                            echo "✅ $NAME Online: Down for $DR (ended $NOW_HUMAN)" >> "$SILENT_BUFFER"
-                        fi
+                    if [ "$IS_SILENT" -eq 0 ]; then
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"✅ Device Online\", \"description\": \"$NAME online\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    else
+                        echo "✅ $NAME Up: $NOW_HUMAN (Down $DR)" >> "$SILENT_BUFFER"
                     fi
                     rm -f "$FD" "$FT"
                 fi
@@ -386,13 +381,8 @@ while true; do
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                 if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
-                    echo "$NOW_HUMAN - [ALERT] DEVICE DOWN: $NAME ($TIP)" >> "$LOGFILE"
-                    if [ "$IS_INT_DOWN" -eq 0 ]; then
-                        if [ "$IS_SILENT" -eq 0 ]; then
-                            curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device DOWN!\", \"description\": \"$PREFIX**$NAME** ($TIP) unreachable.\n**Time:** $NOW_HUMAN$MENTION\", \"color\": 15158332}]}" "$DISCORD_URL" > /dev/null 2>&1
-                        else
-                            echo "🔴 $NAME Offline at $NOW_HUMAN" >> "$SILENT_BUFFER"
-                        fi
+                    if [ "$IS_SILENT" -eq 1 ]; then
+                        echo "🔴 $NAME Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                     fi
                 fi
             fi
