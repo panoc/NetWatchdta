@@ -22,7 +22,7 @@ CYAN='\033[1;36m'   # Light Cyan (Vibrant)
 YELLOW='\033[1;33m' # Bold Yellow
 
 # --- INITIAL HEADER ---
-	 
+     
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
@@ -44,33 +44,41 @@ SERVICE_NAME="netwatchda"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
 LOGFILE="/tmp/netwatchda_log.txt"
 
-# --- 1. CHECK DEPENDENCIES ---
-echo -e "\n${BOLD}📦 Checking dependencies...${NC}"
-			   
+# --- 1. CHECK DEPENDENCIES & STORAGE ---
+echo -e "\n${BOLD}📦 Checking system readiness...${NC}"
 
-				
-if ! command -v curl >/dev/null 2>&1; then
-    echo -e "${YELLOW}📥 curl not found. Attempting to install...${NC}"
-  
+# Storage Check Logic
+FREE_KB=$(df / | awk 'NR==2 {print $4}')
+MIN_KB=3072 # 3MB Threshold
 
-							   
-																		  
-																		
-							  
-																 
-																   
-    opkg update && opkg install curl ca-bundle
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Error: Failed to install curl. Aborting.${NC}"
-        exit 1
-		  
-		
-																										   
-    fi
 	
-																		   
+if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${CYAN}🔍 curl not found. Checking available storage for installation...${NC}"
+    
+    if [ "$FREE_KB" -lt "$MIN_KB" ]; then
+        echo -e "${RED}❌ ERROR: Insufficient storage!${NC}"
+        echo -e "${YELLOW}Available: $((FREE_KB / 1024))MB | Required: 3MB${NC}"
+        echo -e "Aborting to prevent system instability."
+		 
+				 
+				   
+											  
+						 
+																		 
+        exit 1
+    else
+        echo -e "${GREEN}✅ Sufficient space found ($((FREE_KB / 1024))MB).${NC}"
+        echo -e "${YELLOW}📥 Attempting to install curl and ca-bundle...${NC}"
+        opkg update && opkg install curl ca-bundle
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Error: Failed to install curl. Aborting.${NC}"
+            exit 1
+        fi
+    fi
+else
+    echo -e "${GREEN}✅ curl is already installed.${NC}"
 fi
-echo -e "${GREEN}✅ curl is ready.${NC}"
+										 
 
 # --- 2. SMART UPGRADE / INSTALL CHECK ---
 KEEP_CONFIG=0
@@ -196,7 +204,7 @@ EOF
 fi
 
 # --- 4. CREATE INITIAL HUMAN-READABLE LOG ---
-# Create the file before the core script runs to ensure the 'logs' command works immediately
+																							
 NOW_LOG=$(date '+%b %d, %Y %H:%M:%S')
 echo "$NOW_LOG - [SYSTEM] netwatchda installation successful. Service is ready to monitor." > "$LOGFILE"
 
@@ -359,7 +367,7 @@ echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
 echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "${BOLD}3.${NC} Service Help:  ${BOLD}/etc/init.d/netwatchda help${NC}"
-echo -e "${BOLD}4.${NC} View Logs:     ${BOLD}/etc/init.d/netwatchda logs${NC}"
+echo -e "${BOLD}4.${NC} View Logs:      ${BOLD}/etc/init.d/netwatchda logs${NC}"
 echo ""
 echo -e "Monitoring logs: ${BOLD}tail -f /tmp/netwatchda_log.txt${NC}"
 echo -e "${BLUE}-------------------------------------------------------${NC}\n"
