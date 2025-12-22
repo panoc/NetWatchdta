@@ -161,6 +161,11 @@ To remove netwatchda, run the official uninstaller:
 ```sh
 wget --no-check-certificate -qO /tmp/uninstall_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchda.sh" && sh /tmp/uninstall_netwatchda.sh
 ```
+OR
+
+```sh
+/etc/init.d/netwatchda purge
+```
 
 You will be prompted to:
 - Keep configuration files
@@ -179,12 +184,14 @@ You will be prompted to:
 - reload         - Reload configuration files (or restart if service does not implement reload)
 - enable         - Enable service autostart
 - disable        - Disable service autostart
-- discord        - Test discord notification
-- clear          - Clear log file
 - enabled        - Check if service is started on boot
 - status         - Check if monitor is running
 - logs           - View last 20 log entries
+- clear          - Clear log file
+- discord        - Test discord notification
+- purge          - Interactive smart uninstaller
 - running        - Check if service is running
+- status         - Service status
 - trace          - Start with syscall trace
 - info           - Dump procd service info
 - help			     - Display this help message
