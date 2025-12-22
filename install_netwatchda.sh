@@ -21,7 +21,7 @@ BLUE='\033[1;34m'   # Light Blue (Vibrant)
 CYAN='\033[1;36m'   # Light Cyan (Vibrant)
 YELLOW='\033[1;33m' # Bold Yellow
 
-# --- INITIAL SPACING ---
+# --- INITIAL HEADER ---
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
@@ -125,16 +125,6 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         printf "${BOLD}🔔 Mention in Heartbeat? [y/n]: ${NC}"
         read hb_m </dev/tty
         [ "$hb_m" = "y" ] || [ "$hb_m" = "Y" ] && HB_MENTION="ON" || HB_MENTION="OFF"
-
-        printf "${BOLD}🧪 Send a Test Heartbeat now to check format? [y/n]: ${NC}"
-        read hb_test_confirm </dev/tty
-        if [ "$hb_test_confirm" = "y" ] || [ "$hb_test_confirm" = "Y" ]; then
-            HB_MSG="$NOW_HUMAN | $router_name_input | Router Online"
-            DESC="💓 **Heartbeat**: $HB_MSG"
-            [ "$HB_MENTION" = "ON" ] && DESC="$DESC\n🔔 **Attention:** <@$user_id>"
-            curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$DESC\", \"color\": 15844367}]}" "$user_webhook" > /dev/null
-            echo -e "${GREEN}✅ Heartbeat test sent.${NC}"
-        fi
     else
         HB_VAL="OFF"; HB_SEC="86400"; HB_MENTION="OFF"
     fi
@@ -147,9 +137,9 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     read mode_choice </dev/tty
 
     case "$mode_choice" in
-        2) MODE="DEVICES";  EXT_VAL="";        DEV_VAL="ON"  ;;
-        3) MODE="INTERNET"; EXT_VAL="1.1.1.1"; DEV_VAL="OFF" ;;
-        *) MODE="BOTH";     EXT_VAL="1.1.1.1"; DEV_VAL="ON"  ;;
+        2) EXT_VAL="";        DEV_VAL="ON"  ;;
+        3) EXT_VAL="1.1.1.1"; DEV_VAL="OFF" ;;
+        *) EXT_VAL="1.1.1.1"; DEV_VAL="ON"  ;;
     esac
 
     cat <<EOF > "$CONFIG_FILE"
@@ -271,17 +261,51 @@ while true; do
 done
 EOF
 
-# --- 5. SERVICE SETUP ---
+# --- 5. ENHANCED SERVICE SETUP ---
+# Supports all standard OpenWrt commands + custom status, logs, discord
 chmod +x "$INSTALL_DIR/netwatchda.sh"
 cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
+# netwatchda service control
 START=99
 USE_PROCD=1
+
+extra_command "status" "Check if monitor is running"
+extra_command "logs" "View last 20 log entries"
+extra_command "discord" "Test discord notification"
+
 start_service() {
     procd_open_instance
     procd_set_param command /bin/sh "$INSTALL_DIR/netwatchda.sh"
     procd_set_param respawn
     procd_close_instance
+}
+
+status() {
+    if pgrep -f "netwatchda.sh" > /dev/null; then
+        echo "netwatchda is RUNNING."
+    else
+        echo "netwatchda is STOPPED."
+    fi
+}
+
+logs() {
+    if [ -f "/tmp/netwatchda_log.txt" ]; then
+        tail -n 20 /tmp/netwatchda_log.txt
+    else
+        echo "No log file found."
+    fi
+}
+
+discord() {
+    if [ -f "$CONFIG_FILE" ]; then
+        . "$CONFIG_FILE"
+        NOW=\$(date '+%b %d, %Y %H:%M:%S')
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Test Notification\", \"description\": \"**Router:** \$ROUTER_NAME\n**Time:** \$NOW\nManual test triggered from CLI.\", \"color\": 3447003}]}" "\$DISCORD_URL"
+        echo "Test message sent to Discord."
+    else
+        echo "Config file not found. Cannot send test."
+    fi
 }
 EOF
 chmod +x "$SERVICE_PATH"
@@ -303,7 +327,8 @@ echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
 echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
 echo -e "${BOLD}2.${NC} Edit IP List:  ${CYAN}$IP_LIST_FILE${NC}"
-echo -e "${BOLD}3.${NC} Restart:       ${BOLD}/etc/init.d/netwatchda restart${NC}"
+echo -e "${BOLD}3.${NC} Service Help:  ${BOLD}/etc/init.d/netwatchda help${NC}"
+echo -e "${BOLD}4.${NC} Discord Test:  ${BOLD}/etc/init.d/netwatchda discord${NC}"
 echo ""
 echo -e "Monitoring logs: ${BOLD}tail -f /tmp/netwatchda_log.txt${NC}"
 echo -e "${BLUE}-------------------------------------------------------${NC}\n"
