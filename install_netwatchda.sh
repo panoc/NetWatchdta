@@ -3,6 +3,15 @@
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
 
+# --- SELF-CLEAN LOGIC ---
+# Ensures the script file is deleted on Finish, Abort (y/n), or Ctrl+C
+SCRIPT_NAME="$0"
+cleanup() {
+    rm -f "$SCRIPT_NAME"
+    exit
+}
+trap cleanup INT TERM EXIT
+
 # --- COLOR DEFINITIONS (VIBRANT & HIGH CONTRAST) ---
 NC='\033[0m'       
 BOLD='\033[1m'
@@ -23,8 +32,7 @@ echo ""
 printf "${BOLD}❓ This will begin the installation process. Continue? [y/n]: ${NC}"
 read start_confirm </dev/tty
 if [ "$start_confirm" != "y" ] && [ "$start_confirm" != "Y" ]; then
-    echo -e "${RED}❌ Installation aborted by user.${NC}"
-    echo ""
+    echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
 fi
 
@@ -163,7 +171,7 @@ HB_INTERVAL=$HB_SEC # Interval in seconds. Default is 86400
 HB_MENTION="$HB_MENTION" # Set to ON to include @mention in heartbeats.
 
 # Internet Connectivity Check
-EXT_IP="$EXT_IP" # External IP to ping. Leave empty to disable.
+EXT_IP="$EXT_VAL" # External IP to ping. Leave empty to disable.
 EXT_INTERVAL=60 # Seconds between internet checks. Default is 60.
 
 # Local Device Monitoring
@@ -286,12 +294,10 @@ echo -e "${GREEN}✅ Service configured and started.${NC}"
 NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_FINAL\nMonitoring is active.\", \"color\": 3447003}]}" "$DISCORD_URL" > /dev/null
 
-rm -- "$0"
-
 # --- FINAL OUTPUT ---
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete! Script file deleted.${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Next Steps:${NC}"
