@@ -138,11 +138,22 @@ You will be prompted to:
 
 ## ⚙️ Service Management
 
-- Apply Settings: /etc/init.d/netwatchda restart
-- Stop Monitoring: /etc/init.d/netwatchda stop
-- Start Monitoring: /etc/init.d/netwatchda start
-- Check If Running: /etc/init.d/netwatchda status
-- View Live Logs: tail -f /tmp/netwatchda_log.txt
+Usage: /etc/init.d/netwatchda [command]
+
+-	start           Start the service
+- stop            Stop the service
+- restart         Restart the service
+- reload          Reload configuration files (or restart if service does not implement reload)
+- enable          Enable service autostart
+- disable         Disable service autostart
+- discord         Test discord notification
+- enabled         Check if service is started on boot
+- status          Check if monitor is running
+- logs            View last 20 log entries
+- running         Check if service is running
+- trace           Start with syscall trace
+- info            Dump procd service info
+- help			Display this help message
 
 ## 🤝 Contributing
 
