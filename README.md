@@ -28,6 +28,7 @@ Designed for easy installation, reliability, minimal resource usage, and zero bl
 **You need to configure discord with Webhook in order to get netwatchda send notificationn and you need to know your discord User ID to get mentions.**
 
 ###**Phase 1: Create the Discord Webhook**
+
 A Webhook is like a private mailbox address that the script uses to send messages directly into your server.
 * Open Discord on your computer.
 * Pick a Server (or create a new one just for router logs).
@@ -40,6 +41,7 @@ A Webhook is like a private mailbox address that the script uses to send message
 * **Keep this URL safe!** Anyone with this link can send messages to your channel.
 
 ###**Phase 2: Get your User ID (Optional)**
+
 If you want the router to "ping" you (send a notification to your phone/PC) when the internet goes down, you need your numeric User ID.
 * In Discord, go to User Settings (the gear icon at the bottom left).
 * Go to Advanced (under App Settings).
