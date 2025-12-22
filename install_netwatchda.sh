@@ -39,6 +39,7 @@ fi
 INSTALL_DIR="/root/netwatchda"
 CONFIG_FILE="$INSTALL_DIR/netwatchda_settings.conf"
 IP_LIST_FILE="$INSTALL_DIR/netwatchda_ips.conf"
+README_FILE="$INSTALL_DIR/README.txt"
 SERVICE_NAME="netwatchda"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
 LOGFILE="/tmp/netwatchda_log.txt"
@@ -173,7 +174,6 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     
     # --- TEST NOTIFICATION ---
     echo -e "\n${CYAN}🧪 Sending initial test notification...${NC}"
-    # Info Notification -> Cyan color - decimal 1752220
     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"📟 Router Setup\", \"description\": \"Basic connectivity test successful for **$router_name_input**! <@$user_id>\", \"color\": 1752220}]}" "$user_webhook" > /dev/null
     
     printf "${BOLD}❓ Received basic notification on Discord? [y/n]: ${NC}"
@@ -257,9 +257,81 @@ EOF
     [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
 fi
 
-# --- 4. CREATE INITIAL LOG ---
+# --- 4. CREATE INITIAL LOG & README ---
 NOW_LOG=$(date '+%b %d, %Y %H:%M:%S')
 echo "$NOW_LOG - [SYSTEM] netwatchda installation successful." > "$LOGFILE"
+
+cat <<EOF > "$README_FILE"
+===========================================================
+🚀 netwatchda - Network Monitoring for OpenWrt
+===========================================================
+Copyright (C) 2025 panoc
+License: GNU GPLv3
+
+A lightweight daemon for monitoring internet connectivity 
+and local network devices with Discord notifications.
+
+--- 📂 DIRECTORY STRUCTURE ---
+All files are located in: /root/netwatchda/
+
+1. netwatchda.sh            - Core monitoring engine.
+2. netwatchda_settings.conf - Main configuration file.
+3. netwatchda_ips.conf      - Local device list.
+4. README.txt               - This manual.
+
+--- ⚙️ SETTINGS.CONF EXPLAINED ---
+
+[Router Identification]
+- ROUTER_NAME: The name shown in Discord titles (e.g., "Home_Router").
+
+[Discord Settings]
+- DISCORD_URL: Your Webhook URL for message delivery.
+- MY_ID: Your numeric Discord User ID. Used for @mentions.
+- SILENT_ENABLE: (ON/OFF) If ON, mutes alerts during specified hours.
+- SILENT_START/END: 24h format (e.g., 23 and 07). 
+  *Note: Outages are bundled into a Summary sent at SILENT_END.*
+
+[Monitoring Settings]
+- MAX_SIZE: Max log size in bytes (e.g., 512000). Once reached, the 
+  log file in /tmp clears itself to save RAM.
+
+[Heartbeat Settings]
+- HEARTBEAT: (ON/OFF) Sends a periodic "I am alive" message.
+- HB_INTERVAL: Seconds between heartbeats (Default 86400 = 24h).
+- HB_MENTION: (ON/OFF) Choose if the heartbeat should ping your @ID.
+
+[Internet Connectivity]
+- EXT_IP: The target to ping (e.g., 1.1.1.1). Leave empty to disable.
+- EXT_SCAN_INTERVAL: Seconds between internet checks (Default 60).
+- EXT_FAIL_THRESHOLD: Failed checks needed to trigger a "Down" alert.
+- EXT_PING_COUNT: Number of packets sent per check (Default 4).
+
+[Local Device Monitoring]
+- DEVICE_MONITOR: (ON/OFF) Enable/Disable tracking of local IPs.
+- DEV_SCAN_INTERVAL: Seconds between device checks (Default 10).
+- DEV_FAIL_THRESHOLD: Failed checks needed to trigger alert. 
+  *Tip: Set to 3+ for mobile phones to avoid false sleep-mode alerts.*
+- DEV_PING_COUNT: Number of packets sent per check (Default 4).
+
+--- 📋 DEVICE LIST (ips.conf) ---
+Add devices using the format: IP_ADDRESS @ Device Name
+Example: 192.168.1.15 @ Smart_TV
+
+--- 🎨 NOTIFICATION COLORS ---
+- 🔴 RED (15548997): CRITICAL - Internet or Device is DOWN.
+- 🟢 GREEN (3066993): SUCCESS - Connectivity is RESTORED.
+- 🟡 YELLOW (16776960): WARNING - Manual test triggered.
+- 🔵 CYAN (1752220): INFO - System startup or Heartbeat.
+- 🟣 PURPLE (10181046): SUMMARY - Silent hours report.
+
+--- 🛠️ MANAGEMENT COMMANDS ---
+  /etc/init.d/netwatchda restart  - Apply configuration changes
+  /etc/init.d/netwatchda status   - Check if the daemon is running
+  /etc/init.d/netwatchda logs     - View recent activity history
+  /etc/init.d/netwatchda discord  - Send a Yellow Warning test alert
+  /etc/init.d/netwatchda purge    - Interactive Smart Uninstaller
+===========================================================
+EOF
 
 # --- 5. CORE SCRIPT GENERATION ---
 echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
@@ -296,7 +368,6 @@ while true; do
         LAST_HB_CHECK=$NOW_SEC
         HB_MSG="💓 **Heartbeat Report**\n**Router:** $ROUTER_NAME\n**Status:** Systems Operational\n**Time:** $NOW_HUMAN"
         [ "$HB_MENTION" = "ON" ] && HB_MSG="$HB_MSG\n<@$MY_ID>"
-        # Info Notification -> Cyan color - decimal 1752220
         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"System Healthy\", \"description\": \"$HB_MSG\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
         echo "$NOW_HUMAN - [SYSTEM] [$ROUTER_NAME] Heartbeat sent." >> "$LOGFILE"
     fi
@@ -315,7 +386,6 @@ while true; do
     if [ "$IS_SILENT" -eq 0 ] && [ -s "$SILENT_BUFFER" ]; then
         SUMMARY_CONTENT=$(cat "$SILENT_BUFFER")
         CLEAN_SUMMARY=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
-        # Silent Summary -> Purple color - decimal 10181046
         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌙 Silent Hours Summary\", \"description\": \"**Router:** $ROUTER_NAME\\n$CLEAN_SUMMARY\", \"color\": 10181046}]}" "$DISCORD_URL" > /dev/null 2>&1
         [ $? -eq 0 ] && > "$SILENT_BUFFER"
     fi
@@ -332,7 +402,6 @@ while true; do
                 echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN (Target: $EXT_IP)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
-                    # Critical / Down -> Vivid Red color - decimal 15548997
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     echo "🌐 Internet Outage: $NOW_HUMAN" >> "$SILENT_BUFFER"
@@ -349,7 +418,6 @@ while true; do
                 echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] INTERNET UP (Target: $EXT_IP | Down $DR)" >> "$LOGFILE"
                 
                 if [ "$IS_SILENT" -eq 0 ]; then
-                    # Success / Online -> Vivid Green color - decimal 3066993
                     curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"Connectivity Restored\", \"description\": \"$MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                 else
                     echo -e "$MSG" >> "$SILENT_BUFFER"
@@ -380,7 +448,6 @@ while true; do
                     echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" >> "$LOGFILE"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # Success / Online -> Vivid Green color - decimal 3066993
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$D_MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
                         echo -e "$D_MSG" >> "$SILENT_BUFFER"
@@ -394,7 +461,6 @@ while true; do
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
                     echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" >> "$LOGFILE"
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # Critical / Down -> Vivid Red color - decimal 15548997
                         curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
                     else
                         echo -e "🔴 $NAME ($TIP) Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
@@ -413,7 +479,7 @@ while true; do
 done
 EOF
 
-# --- 6. ENHANCED SERVICE SETUP ---
+# --- 6. ENHANCED SERVICE SETUP (WITH SMART PURGE) ---
 chmod +x "$INSTALL_DIR/netwatchda.sh"
 cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
@@ -424,6 +490,7 @@ extra_command "status" "Check if monitor is running"
 extra_command "logs" "View last 20 log entries"
 extra_command "clear" "Clear the log file"
 extra_command "discord" "Test discord notification"
+extra_command "purge" "Interactive smart uninstaller"
 
 start_service() {
     procd_open_instance
@@ -448,10 +515,53 @@ clear() {
 discord() {
     if [ -f "$CONFIG_FILE" ]; then
         eval "\$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
-        # Warning Notification -> Pure Yellow color - decimal 16776960
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered from CLI.\", \"color\": 16776960}]}" "\$DISCORD_URL"
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$DISCORD_URL"
         echo "Warning test message (Yellow) sent."
     fi
+}
+
+purge() {
+    echo ""
+    echo -e "\033[1;31m=======================================================\033[0m"
+    echo -e "\033[1;31m🗑️  netwatchda Smart Uninstaller\033[0m"
+    echo -e "\033[1;31m=======================================================\033[0m"
+    echo ""
+    echo "1. Full Uninstall (Remove everything)"
+    echo "2. Keep Settings (Remove logic but keep config & README)"
+    echo "3. Cancel"
+    printf "Choice [1-3]: "
+    read choice </dev/tty
+    
+    case "\$choice" in
+        1)
+            echo "🛑 Stopping service..."
+            /etc/init.d/netwatchda stop
+            /etc/init.d/netwatchda disable
+            echo "🧹 Cleaning up /tmp and buffers..."
+            rm -f "/tmp/netwatchda_log.txt" "/tmp/nwda_*"
+            echo "🗑️  Removing installation directory..."
+            rm -rf "$INSTALL_DIR"
+            echo "🔥 Self-destructing service file..."
+            rm -f "$SERVICE_PATH"
+            echo -e "\033[1;32m✅ netwatchda has been completely removed.\033[0m"
+            ;;
+        2)
+            echo "🛑 Stopping service..."
+            /etc/init.d/netwatchda stop
+            /etc/init.d/netwatchda disable
+            echo "🧹 Cleaning up /tmp and buffers..."
+            rm -f "/tmp/netwatchda_log.txt" "/tmp/nwda_*"
+            echo "🗑️  Removing core script..."
+            rm -f "$INSTALL_DIR/netwatchda.sh"
+            echo "🔥 Removing service file..."
+            rm -f "$SERVICE_PATH"
+            echo -e "\033[1;33m✅ Logic removed. Settings preserved in $INSTALL_DIR\033[0m"
+            ;;
+        *)
+            echo "❌ Purge cancelled."
+            exit 0
+            ;;
+    esac
 }
 EOF
 
@@ -462,17 +572,16 @@ chmod +x "$SERVICE_PATH"
 # --- 7. SUCCESS NOTIFICATION ---
 eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
 NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
-# Info Notification -> Cyan color - decimal 1752220
 curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_FINAL\nMonitoring is active.\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null
 
 # --- FINAL OUTPUT ---
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete! ips.conf header updated.${NC}"
+echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
-echo -e "\n${BOLD}Next Steps:${NC}"
-echo -e "${BOLD}1.${NC} Edit Settings: ${CYAN}$CONFIG_FILE${NC}"
-echo -e "${BOLD}2.${NC} Update IP List with @:  ${CYAN}$IP_LIST_FILE${NC}"
-echo -e "${BOLD}3.${NC} Restart Service:${BOLD} /etc/init.d/netwatchda restart${NC}"
+echo -e "\n${BOLD}Quick Commands:${NC}"
+echo -e "${BOLD}1.${NC} View Help:     ${CYAN}cat $README_FILE${NC}"
+echo -e "${BOLD}2.${NC} View Logs:     ${CYAN}/etc/init.d/netwatchda logs${NC}"
+echo -e "${BOLD}3.${NC} Uninstall:     ${RED}/etc/init.d/netwatchda purge${NC}"
 echo ""
