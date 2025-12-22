@@ -61,7 +61,8 @@ if ! command -v curl >/dev/null 2>&1; then
         echo -e "${YELLOW}Available: $((FREE_FLASH_KB / 1024))MB | Required: 3MB${NC}"
         exit 1
     else
-        echo -e "${GREEN}✅ Sufficient Flash space found ($((FREE_FLASH_KB / 1024))MB).${NC}"
+        # --- STORAGE SUCCESS MESSAGE ---
+        echo -e "${GREEN}✅ Sufficient Flash space found: $((FREE_FLASH_KB / 1024))MB available.${NC}"
         echo -e "${YELLOW}📥 Attempting to install curl and ca-bundle...${NC}"
         opkg update && opkg install curl ca-bundle
         if [ $? -ne 0 ]; then
@@ -70,7 +71,8 @@ if ! command -v curl >/dev/null 2>&1; then
         fi
     fi
 else
-    echo -e "${GREEN}✅ curl is ready.${NC}"
+    echo -e "${GREEN}✅ curl is already installed.${NC}"
+    echo -e "${GREEN}✅ Flash storage check passed: $((FREE_FLASH_KB / 1024))MB available.${NC}"
 fi
 
 # Determine Log size based on RAM availability
@@ -79,7 +81,7 @@ if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
     echo -e "${CYAN}📉 Scaling down log rotation size to 64KB for system stability.${NC}"
     DEFAULT_MAX_LOG=65536 # 64KB
 else
-    echo -e "${GREEN}✅ Sufficient RAM for standard logging ($FREE_RAM_KB KB).${NC}"
+    echo -e "${GREEN}✅ Sufficient RAM for standard logging ($FREE_RAM_KB KB available).${NC}"
 fi
 
 # --- 2. SMART UPGRADE / INSTALL CHECK ---
