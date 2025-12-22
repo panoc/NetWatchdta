@@ -243,7 +243,7 @@ EXT_PING_COUNT=$EXT_COUNT # Number of pings per check. Default 4.
 [Local Device Monitoring]
 DEVICE_MONITOR="$DEV_VAL" # Set to ON to enable local IP monitoring.
 DEV_SCAN_INTERVAL=10 # Seconds between device pings. Default is 10.
-DEV_FAIL_THRESHOLD=3 # Number of failed pings before alert. Default 3.
+DEV_FAIL_THRESHOLD=3 # Number of failed cycles before alert. Default 3.
 DEV_PING_COUNT=$DEV_COUNT # Number of pings per check. Default 4.
 EOF
 
@@ -275,7 +275,7 @@ SILENT_BUFFER="/tmp/nwda_silent_buffer"
 LAST_EXT_CHECK=0
 LAST_DEV_CHECK=0
 LAST_HB_CHECK=$(date +%s)
-touch "$SILENT_BUFFER"
+[ ! -f "$SILENT_BUFFER" ] && touch "$SILENT_BUFFER"
 
 # Load config helper safely (strips INI headers)
 load_config() {
@@ -360,7 +360,6 @@ while true; do
     # Local Device Check Logic (STRICT PARSING)
     if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
-        # Only process lines starting with a number to ignore stray 'y/n' artifacts
         grep -E '^[0-9]' "$IP_LIST_FILE" | while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in ""|\#*) continue ;; esac
             TIP=$(echo "$line" | cut -d'#' -f1 | tr -d ' \t\r\n')
