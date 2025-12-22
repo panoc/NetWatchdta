@@ -12,16 +12,16 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-# --- COLOR DEFINITIONS (VIBRANT & HIGH CONTRAST) ---
+# --- COLOR DEFINITIONS ---
 NC='\033[0m'       
 BOLD='\033[1m'
-RED='\033[1;31m'    # Light Red (High Visibility)
+RED='\033[1;31m'    # Light Red
 GREEN='\033[1;32m'  # Light Green
 BLUE='\033[1;34m'   # Light Blue
 CYAN='\033[1;36m'   # Light Cyan
 YELLOW='\033[1;33m' # Bold Yellow
 
-# --- INITIAL SPACING ---
+# --- INITIAL HEADER ---
 echo ""
 echo -e "${RED}=======================================================${NC}"
 echo -e "${BOLD}${RED}🗑️  netwatchda Uninstaller${NC} (by ${BOLD}panoc${NC})"
@@ -48,11 +48,11 @@ if [ -d "$INSTALL_DIR" ] || [ -f "$SERVICE_PATH" ]; then
             ;;
         2)
             KEEP_CONF=1
-            echo -e "\n${YELLOW}📂 Preservation Mode: Configuration files will be kept.${NC}"
+            echo -e "\n${YELLOW}📂 Preservation Mode: Config and README will be kept.${NC}"
             ;;
         *)
             KEEP_CONF=0
-            echo -e "\n${RED}🗑️  Full Uninstall: All files and settings will be deleted.${NC}"
+            echo -e "\n${RED}🗑️  Full Uninstall: All files, logs, and settings will be deleted.${NC}"
             ;;
     esac
 else
@@ -66,7 +66,7 @@ if [ -f "$SERVICE_PATH" ]; then
     $SERVICE_PATH stop 2>/dev/null
     $SERVICE_PATH disable 2>/dev/null
     
-    # Sniper Kill: Kill background script but NOT this uninstaller ($$)
+    # Kill background script but NOT this uninstaller ($$)
     TARGET_PID=$(pgrep -f "netwatchda.sh" | grep -v "$$")
     [ -n "$TARGET_PID" ] && kill -9 $TARGET_PID 2>/dev/null
     
@@ -74,22 +74,23 @@ if [ -f "$SERVICE_PATH" ]; then
     killall -q ping 2>/dev/null 
 
     rm -f "$SERVICE_PATH"
-    echo -e "${GREEN}✅ Service removed.${NC}"
+    echo -e "${GREEN}✅ Service removed from /etc/init.d/${NC}"
 fi
 
 # --- 3. CLEAN UP TEMPORARY STATE FILES ---
-echo -e "${CYAN}🧹 Cleaning up temporary state files...${NC}"
-rm -f /tmp/netwatchda_log.txt /tmp/nwda_ext_* /tmp/nwda_c_* /tmp/nwda_d_* /tmp/nwda_t_*
-echo -e "${GREEN}✅ Temp files cleared.${NC}"
+echo -e "${CYAN}🧹 Cleaning up temporary state files and buffers...${NC}"
+# Added nwda_silent_buffer to the cleanup list
+rm -f /tmp/netwatchda_log.txt /tmp/nwda_silent_buffer /tmp/nwda_ext_* /tmp/nwda_c_* /tmp/nwda_d_* /tmp/nwda_t_*
+echo -e "${GREEN}✅ Temp files and logs cleared.${NC}"
 
 # --- 4. REMOVE INSTALLATION FILES ---
 if [ "$KEEP_CONF" -eq 1 ]; then
     # Specifically remove only the core logic script
     if [ -f "$INSTALL_DIR/netwatchda.sh" ]; then
         rm -f "$INSTALL_DIR/netwatchda.sh"
-        echo -e "${GREEN}✅ Core script removed.${NC}"
+        echo -e "${GREEN}✅ Core logic script removed.${NC}"
     fi
-    echo -e "${YELLOW}📂 Configuration preserved in $INSTALL_DIR${NC}"
+    echo -e "${YELLOW}📂 Settings preserved in $INSTALL_DIR${NC}"
 else
     if [ -d "$INSTALL_DIR" ]; then
         echo -e "${RED}🗑️  Removing directory $INSTALL_DIR...${NC}"
@@ -99,13 +100,13 @@ else
         if [ -d "$INSTALL_DIR" ]; then
             echo -e "${BOLD}${RED}❌ ERROR: Could not remove directory. Filesystem might be Read-Only!${NC}"
         else
-            echo -e "${GREEN}✅ All files removed.${NC}"
+            echo -e "${GREEN}✅ All files and directory removed.${NC}"
         fi
     fi
 fi
 
 # --- 5. FINAL CLEANUP ---
 echo -e "\n${GREEN}---${NC}"
-echo -e "${BOLD}${GREEN}✨ Uninstallation complete! Uninstaller file deleted.${NC}"
+echo -e "${BOLD}${GREEN}✨ Uninstallation complete! This uninstaller has deleted itself.${NC}"
 echo -e "${RED}-------------------------------------------------------${NC}"
 echo ""
