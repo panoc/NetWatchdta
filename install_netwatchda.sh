@@ -83,7 +83,7 @@ echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
-ask_yn "❓ This will begin the installation process. Continue?"
+ask_yn "❓ This will begin the installation process. paaaaaaanoxContinue?"
 if [ "$ANSWER_YN" = "n" ]; then
     echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
@@ -639,8 +639,11 @@ send_payload() {
     # 1. DISCORD
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
-             if curl -s -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
+             # Added -k fallback for old CA certs
+             if curl -s -k -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
                 success=1
+             else
+                log_msg "[ERROR] Discord send failed." "UPTIME"
              fi
         fi
     fi
@@ -653,10 +656,13 @@ send_payload() {
 $desc"
              if [ -n "$telegram_text" ]; then t_msg="$telegram_text"; fi
              
-             if curl -s -f -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+             # Added -k fallback
+             if curl -s -k -f -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
                 -d chat_id="$TELEGRAM_CHAT_ID" \
                 -d text="$t_msg" >/dev/null 2>&1; then
                 success=1
+             else
+                log_msg "[ERROR] Telegram send failed." "UPTIME"
              fi
         fi
     fi
@@ -692,7 +698,6 @@ send_notification() {
     fi
 
     # IF Internet is DOWN and not forced -> BUFFER IT
-    # Note: Device alerts during outage must be buffered.
     if [ "$net_stat" = "DOWN" ] && [ "$force" != "YES" ]; then
         # Check Buffer Size (5KB Limit = 5120 bytes)
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
@@ -711,10 +716,7 @@ send_notification() {
         return
     fi
 
-    # Load Creds
-    load_credentials
-    
-    # Try sending
+    # Try sending (creds already loaded in main loop)
     if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text"; then
         # If CURL fails despite status being UP, buffer it as safety net
         # Check Buffer Size (5KB Limit)
@@ -728,16 +730,12 @@ send_notification() {
              log_msg "[BUFFER] Send failed (Curl error). Notification buffered." "UPTIME"
         fi
     fi
-    
-    # Clear RAM
-    unset DISCORD_WEBHOOK DISCORD_USERID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
 }
 
 # --- HELPER: FLUSH BUFFER ---
 flush_buffer() {
     if [ -f "$OFFLINE_BUFFER" ]; then
         log_msg "[SYSTEM] Internet Restored. Flushing buffer..." "UPTIME"
-        load_credentials
         
         # Read file line by line
         while IFS= read -r line; do
@@ -759,14 +757,16 @@ flush_buffer() {
              send_payload "$b_title" "$b_desc" "$b_color" "$b_filter" "$b_tel"
         done < "$OFFLINE_BUFFER"
         
+        # Explicit Clear
         rm -f "$OFFLINE_BUFFER"
-        unset DISCORD_WEBHOOK DISCORD_USERID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+        log_msg "[SYSTEM] Buffer flushed and cleared." "UPTIME"
     fi
 }
 
 # --- MAIN LOGIC LOOP ---
 while true; do
     load_config
+    load_credentials # Load once per loop to ensure availability
     
     NOW_HUMAN=$(date '+%b %d %H:%M:%S')
     NOW_SEC=$(date +%s)
@@ -815,6 +815,7 @@ while true; do
         send_notification "🌙 Silent Hours Summary" "**Router:** $ROUTER_NAME\n$CLEAN_SUMMARY" "10181046" "SUMMARY" "BOTH" "NO" "🌙 Silent Hours Summary - $ROUTER_NAME
 $SUMMARY_CONTENT"
         > "$SILENT_BUFFER"
+        log_msg "[SYSTEM] Silent buffer dumped and cleared." "UPTIME"
     fi
 
     # --- INTERNET MONITORING ---
@@ -868,7 +869,6 @@ $SUMMARY_CONTENT"
                     MSG_D="**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
                     
                     # TELEGRAM FORMAT
-                    # 🟢 Connectivity Restored * Router name - date and time of down event - date and time for up event - Total Outage
                     MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - $START_TIME - $NOW_HUMAN - $DR"
                     
                     log_msg "[SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" "UPTIME"
@@ -1155,7 +1155,7 @@ discord() {
     
     if [ -n "\$webhook" ]; then
         echo "Sending Discord test..."
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook"
+        curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook"
         echo "Sent."
     else
         echo "No Discord Webhook configured or vault locked."
@@ -1170,7 +1170,7 @@ telegram() {
     
     if [ -n "\$token" ]; then
         echo "Sending Telegram test..."
-        curl -s -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME"
+        curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME"
         echo "Sent."
     else
         echo "No Telegram Token configured or vault locked."
@@ -1302,11 +1302,11 @@ NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 MSG="**Router:** $router_name_input\n**Time:** $NOW_FINAL\n**Status:** Service Installed & Active"
 
 if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
-    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"$MSG\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1
+    curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"$MSG\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1
 fi
 
 if [ "$TELEGRAM_ENABLE_VAL" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🚀 netwatchda Service Started - $router_name_input" >/dev/null 2>&1
+    curl -s -k -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🚀 netwatchda Service Started - $router_name_input" >/dev/null 2>&1
 fi
 
 # ==============================================================================
