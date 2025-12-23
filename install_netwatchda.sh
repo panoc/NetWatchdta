@@ -83,7 +83,7 @@ echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
-ask_yn "❓ This will begin the installation process. paaaaaaanoxContinue?"
+ask_yn "❓ This will begin the installation process. Continue?"
 if [ "$ANSWER_YN" = "n" ]; then
     echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
@@ -256,7 +256,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         ask_yn "   ❓ Send test notification to Discord now?"
         if [ "$ANSWER_YN" = "y" ]; then
              echo -e "${YELLOW}   🧪 Sending Discord test...${NC}"
-             curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK"
+             curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK"
              echo ""
              ask_yn "   ❓ Did you receive the notification?"
              
@@ -304,7 +304,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         ask_yn "   ❓ Send test notification to Telegram now?"
         if [ "$ANSWER_YN" = "y" ]; then
             echo -e "${YELLOW}   🧪 Sending Telegram test...${NC}"
-            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🧪 Setup Test - Telegram configured successfully for $router_name_input." >/dev/null 2>&1
+            curl -s -k -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🧪 Setup Test - Telegram configured successfully for $router_name_input." >/dev/null 2>&1
             echo ""
             ask_yn "   ❓ Did you receive the notification?"
             
@@ -639,8 +639,11 @@ send_payload() {
     # 1. DISCORD
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
-             # Added -k fallback for old CA certs
-             if curl -s -k -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
+             # Sanitize desc for JSON: replace actual newlines with \n string
+             local json_desc=$(echo "$desc" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+             
+             # Fallback curl -k for SSL compat
+             if curl -s -k -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
                 success=1
              else
                 log_msg "[ERROR] Discord send failed." "UPTIME"
@@ -656,7 +659,6 @@ send_payload() {
 $desc"
              if [ -n "$telegram_text" ]; then t_msg="$telegram_text"; fi
              
-             # Added -k fallback
              if curl -s -k -f -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
                 -d chat_id="$TELEGRAM_CHAT_ID" \
                 -d text="$t_msg" >/dev/null 2>&1; then
@@ -716,7 +718,7 @@ send_notification() {
         return
     fi
 
-    # Try sending (creds already loaded in main loop)
+    # Try sending (creds must be loaded)
     if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text"; then
         # If CURL fails despite status being UP, buffer it as safety net
         # Check Buffer Size (5KB Limit)
@@ -747,17 +749,13 @@ flush_buffer() {
              local b_tel_raw=$(echo "$line" | awk -F'|||' '{print $5}')
              
              # Restore newlines from __BR__ placeholder
-             # For Discord (JSON), we need literal '\n' string (double escaped)
-             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\\n/g')
-             
-             # For Telegram (Text), we need actual newlines
+             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\n/g')
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              
              sleep 1 # Maintain delay for buffered messages too
              send_payload "$b_title" "$b_desc" "$b_color" "$b_filter" "$b_tel"
         done < "$OFFLINE_BUFFER"
         
-        # Explicit Clear
         rm -f "$OFFLINE_BUFFER"
         log_msg "[SYSTEM] Buffer flushed and cleared." "UPTIME"
     fi
@@ -766,7 +764,7 @@ flush_buffer() {
 # --- MAIN LOGIC LOOP ---
 while true; do
     load_config
-    load_credentials # Load once per loop to ensure availability
+    load_credentials # Load creds at start of loop to ensure variables are present
     
     NOW_HUMAN=$(date '+%b %d %H:%M:%S')
     NOW_SEC=$(date +%s)
@@ -845,7 +843,6 @@ $SUMMARY_CONTENT"
                     log_msg "[ALERT] [$ROUTER_NAME] INTERNET DOWN" "UPTIME"
                     
                     # NOTE: Internet Down notification is SUPPRESSED. 
-                    # Timeline is handled by Restored message.
                     
                     if [ "$IS_SILENT" -ne 0 ]; then
                         # Check Buffer Limit (5KB)
