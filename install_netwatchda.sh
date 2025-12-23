@@ -77,7 +77,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} v1 (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} v1.1 (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -140,7 +140,19 @@ MIN_FLASH_KB=3072 # 3MB Threshold
 FREE_RAM_KB=$(df /tmp | awk 'NR==2 {print $4}')
 MIN_RAM_KB=4096 # 4MB Threshold
 
-# 3. Define Dependency List
+# 3. Check Physical Memory for Execution Method Auto-Detection
+# We check /proc/meminfo for MemTotal. 
+# Rule: >= 256MB (262144 kB) = Parallel (1), < 256MB = Sequential (2)
+TOTAL_PHY_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+if [ "$TOTAL_PHY_MEM_KB" -ge 262144 ]; then
+    AUTO_EXEC_METHOD="1"
+    EXEC_MSG="Parallel (High RAM Detected: $((TOTAL_PHY_MEM_KB/1024))MB)"
+else
+    AUTO_EXEC_METHOD="2"
+    EXEC_MSG="Sequential (Low RAM Detected: $((TOTAL_PHY_MEM_KB/1024))MB)"
+fi
+
+# 4. Define Dependency List
 MISSING_DEPS=""
 # Check for curl
 command -v curl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS curl"
@@ -198,6 +210,8 @@ else
 fi
 
 echo -e "${GREEN}✅ System Ready.${NC}"
+echo -e "${GREEN}✅ Execution Mode Auto-Selected: ${BOLD}${WHITE}$EXEC_MSG${NC}"
+
 # ==============================================================================
 #  STEP 3: SMART UPGRADE / INSTALL CHECK
 # ==============================================================================
@@ -438,6 +452,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
 # Note: Credentials are stored in .vault.enc (Method: $ENCRYPTION_METHOD)
 ROUTER_NAME="$router_name_input"
 ENCRYPTION_METHOD="$ENCRYPTION_METHOD" # Options: OPENSSL, BASE64
+EXEC_METHOD="$AUTO_EXEC_METHOD" # 1 = Parallel (Fast, High RAM > 256MB), 2 = Sequential (Safe, Low RAM < 256MB)
 
 [Log Settings]
 UPTIME_LOG_MAX_SIZE=51200 # Max log file size in bytes for uptime tracking. Default is 51200.
@@ -896,12 +911,73 @@ $SUMMARY_CONTENT"
         if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
             LAST_DEV_CHECK=$NOW_SEC
             
-            grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
-                (
+            # --- EXECUTION METHOD SWITCH ---
+            # 1 = PARALLEL (Original, Forking)
+            # 2 = SEQUENTIAL (New, Low RAM safe)
+            if [ "$EXEC_METHOD" = "1" ]; then
+                # === METHOD 1: PARALLEL EXECUTION ===
+                grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
+                    (
+                        TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
+                        NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
+                        [ -z "$NAME" ] && NAME="$TIP"
+                        [ -z "$TIP" ] && exit
+                        
+                        SIP=$(echo "$TIP" | tr '.' '_')
+                        FC="$TMP_DIR/dev_${SIP}_c"; FD="$TMP_DIR/dev_${SIP}_d"; FT="$TMP_DIR/dev_${SIP}_t"
+                        
+                        if ping -q -c "$DEV_PING_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
+                            log_msg "DEVICE - $NAME - $TIP: UP" "PING"
+                            if [ -f "$FD" ]; then
+                                DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$(( $(date +%s) - DSSEC ))
+                                DR_STR="$((DUR/60))m $((DUR%60))s"
+                                CUR_TIME=$(date '+%b %d %H:%M:%S')
+                                
+                                D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
+                                T_MSG="🟢 Device UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
+                                
+                                log_msg "[SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" "UPTIME"
+                                
+                                if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
+                                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                                         echo "Device $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
+                                     fi
+                                else
+                                     send_notification "🟢 Device Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
+                                fi
+                                rm -f "$FD" "$FT"
+                            fi
+                            echo 0 > "$FC"
+                        else
+                            log_msg "DEVICE - $NAME - $TIP: DOWN" "PING"
+                            C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+                            if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
+                                 TS=$(date '+%b %d %H:%M:%S'); TSEC=$(date +%s)
+                                 echo "$TSEC" > "$FD"; echo "$TS" > "$FT"
+                                 log_msg "[ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" "UPTIME"
+                                 
+                                 D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $TS"
+                                 T_MSG="🔴 Device Down * $ROUTER_NAME - $NAME - $TIP - $TS"
+                                 
+                                 if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
+                                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                                         echo "Device $NAME DOWN: $TS" >> "$SILENT_BUFFER"
+                                     fi
+                                 else
+                                     send_notification "🔴 Device Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
+                                 fi
+                            fi
+                        fi
+                    ) &
+                done
+                wait
+            else
+                # === METHOD 2: SEQUENTIAL EXECUTION (LOW RAM) ===
+                grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
                     TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
                     NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
                     [ -z "$NAME" ] && NAME="$TIP"
-                    [ -z "$TIP" ] && exit
+                    [ -z "$TIP" ] && continue
                     
                     SIP=$(echo "$TIP" | tr '.' '_')
                     FC="$TMP_DIR/dev_${SIP}_c"; FD="$TMP_DIR/dev_${SIP}_d"; FT="$TMP_DIR/dev_${SIP}_t"
@@ -913,9 +989,7 @@ $SUMMARY_CONTENT"
                             DR_STR="$((DUR/60))m $((DUR%60))s"
                             CUR_TIME=$(date '+%b %d %H:%M:%S')
                             
-                            # DISCORD
                             D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
-                            # TELEGRAM
                             T_MSG="🟢 Device UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
                             
                             log_msg "[SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" "UPTIME"
@@ -938,9 +1012,7 @@ $SUMMARY_CONTENT"
                              echo "$TSEC" > "$FD"; echo "$TS" > "$FT"
                              log_msg "[ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" "UPTIME"
                              
-                             # DISCORD
                              D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $TS"
-                             # TELEGRAM
                              T_MSG="🔴 Device Down * $ROUTER_NAME - $NAME - $TIP - $TS"
                              
                              if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
@@ -952,9 +1024,9 @@ $SUMMARY_CONTENT"
                              fi
                         fi
                     fi
-                ) &
-            done
-            wait
+                done
+                # No 'wait' here
+            fi
         fi
     fi
     sleep 1
