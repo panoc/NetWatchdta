@@ -77,7 +77,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} dasdsadadsadaas(by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -639,7 +639,9 @@ send_payload() {
     # 1. DISCORD
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
-             # JSON Safe Description (Replace newline literals with \n string)
+             # Use standard desc for Discord
+             # Ensure proper JSON formatting for description
+             # Replace literal newlines with \n for JSON
              local json_desc=$(echo "$desc" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
              
              if curl -s -k -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
@@ -707,8 +709,7 @@ send_notification() {
         fi
 
         # Format: TITLE|||DESC|||COLOR|||FILTER|||TELEGRAM_TEXT
-        # We replace newlines with __BR__ placeholder to preserve formatting in buffer
-        # and flatten the entry to a single line.
+        # Flatten newlines to __BR__ for storage
         local clean_desc=$(echo "$desc" | sed ':a;N;$!ba;s/\n/__BR__/g')
         local clean_tel=$(echo "$tel_text" | sed ':a;N;$!ba;s/\n/__BR__/g')
         
@@ -717,14 +718,13 @@ send_notification() {
         return
     fi
 
-    # Try sending (creds loaded in main loop)
+    # Try sending (creds must be loaded)
     if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text"; then
         # If CURL fails despite status being UP, buffer it as safety net
         # Check Buffer Size (5KB Limit)
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
              log_msg "[BUFFER] Buffer full (5KB). Send failed & dropped." "UPTIME"
         else
-             # Use __BR__ placeholder
              local clean_desc=$(echo "$desc" | sed ':a;N;$!ba;s/\n/__BR__/g')
              local clean_tel=$(echo "$tel_text" | sed ':a;N;$!ba;s/\n/__BR__/g')
              echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}" >> "$OFFLINE_BUFFER"
@@ -748,8 +748,6 @@ flush_buffer() {
              local b_tel_raw=$(echo "$line" | awk -F'|||' '{print $5}')
              
              # Restore newlines from __BR__ placeholder
-             # For Discord (passed to send_payload logic), we restore to actual newlines
-             # send_payload handles JSON escaping internally
              local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\n/g')
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              
@@ -810,7 +808,6 @@ while true; do
     if [ "$IS_SILENT" -eq 0 ] && [ -s "$SILENT_BUFFER" ]; then
         SUMMARY_CONTENT=$(cat "$SILENT_BUFFER")
         CLEAN_SUMMARY=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
-        # Send Buffer content as both Discord and Telegram compatible
         send_notification "🌙 Silent Hours Summary" "**Router:** $ROUTER_NAME\n$CLEAN_SUMMARY" "10181046" "SUMMARY" "BOTH" "NO" "🌙 Silent Hours Summary - $ROUTER_NAME
 $SUMMARY_CONTENT"
         > "$SILENT_BUFFER"
@@ -869,10 +866,10 @@ $SUMMARY_CONTENT"
                     log_msg "[SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" "UPTIME"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # FORCE SEND - Bypass Buffer Check because we know it's UP
+                        # 1. SEND INTERNET RESTORED NOTIFICATION
                         send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T"
                         
-                        # FLUSH BUFFER (Send queued device alerts)
+                        # 2. FLUSH BUFFER (Send queued device alerts)
                         flush_buffer
                     else
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then
@@ -895,9 +892,6 @@ $SUMMARY_CONTENT"
         if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
             LAST_DEV_CHECK=$NOW_SEC
             
-            BATCH_EVENTS="$TMP_DIR/nwda_batch_events"
-            > "$BATCH_EVENTS" 
-
             grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
                 (
                     TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
@@ -907,9 +901,7 @@ $SUMMARY_CONTENT"
                     
                     SIP=$(echo "$TIP" | tr '.' '_')
                     FC="$TMP_DIR/dev_${SIP}_c"; FD="$TMP_DIR/dev_${SIP}_d"; FT="$TMP_DIR/dev_${SIP}_t"
-                    E_FILE="$TMP_DIR/event_${SIP}"
-                    rm -f "$E_FILE"
-
+                    
                     if ping -q -c "$DEV_PING_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
                         log_msg "DEVICE - $NAME - $TIP: UP" "PING"
                         if [ -f "$FD" ]; then
@@ -917,8 +909,20 @@ $SUMMARY_CONTENT"
                             DR_STR="$((DUR/60))m $((DUR%60))s"
                             CUR_TIME=$(date '+%b %d %H:%M:%S')
                             
+                            # DISCORD
+                            D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
+                            # TELEGRAM
+                            T_MSG="🟢 Device UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
+                            
                             log_msg "[SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" "UPTIME"
-                            echo "UP|$NAME|$TIP|$CUR_TIME|$DR_STR|$DSTART" > "$E_FILE"
+                            
+                            if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
+                                 if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                                     echo "Device $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
+                                 fi
+                            else
+                                 send_notification "🟢 Device Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
+                            fi
                             rm -f "$FD" "$FT"
                         fi
                         echo 0 > "$FC"
@@ -929,101 +933,24 @@ $SUMMARY_CONTENT"
                              TS=$(date '+%b %d %H:%M:%S'); TSEC=$(date +%s)
                              echo "$TSEC" > "$FD"; echo "$TS" > "$FT"
                              log_msg "[ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" "UPTIME"
-                             echo "DOWN|$NAME|$TIP|$TS" > "$E_FILE"
+                             
+                             # DISCORD
+                             D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $TS"
+                             # TELEGRAM
+                             T_MSG="🔴 Device Down * $ROUTER_NAME - $NAME - $TIP - $TS"
+                             
+                             if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
+                                 if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                                     echo "Device $NAME DOWN: $TS" >> "$SILENT_BUFFER"
+                                 fi
+                             else
+                                 send_notification "🔴 Device Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
+                             fi
                         fi
                     fi
                 ) &
             done
             wait
-            
-            cat "$TMP_DIR"/event_* >> "$BATCH_EVENTS" 2>/dev/null
-            rm -f "$TMP_DIR"/event_* 2>/dev/null
-
-            # --- BATCH PROCESSOR ---
-            
-            # 1. Process DOWN Events
-            DOWN_COUNT=$(grep -c "^DOWN" "$BATCH_EVENTS")
-            if [ "$DOWN_COUNT" -eq 1 ]; then
-                 LINE=$(grep "^DOWN" "$BATCH_EVENTS")
-                 D_NAME=$(echo "$LINE" | cut -d'|' -f2); D_IP=$(echo "$LINE" | cut -d'|' -f3); D_TIME=$(echo "$LINE" | cut -d'|' -f4)
-                 
-                 D_MSG="**Router:** $ROUTER_NAME\n**Device:** $D_NAME ($D_IP)\n**Time:** $D_TIME"
-                 T_MSG="🔴 Device Down * $ROUTER_NAME - $D_NAME - $D_IP - $D_TIME"
-                 
-                 if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
-                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "Device $D_NAME DOWN: $D_TIME" >> "$SILENT_BUFFER"
-                     fi
-                 else
-                     send_notification "🔴 Device Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
-                 fi
-            elif [ "$DOWN_COUNT" -gt 1 ]; then
-                 CUR_TIME=$(date '+%b %d %H:%M:%S')
-                 D_LIST=""; T_LIST=""
-                 grep "^DOWN" "$BATCH_EVENTS" | while IFS= read -r line; do
-                     d_n=$(echo "$line" | cut -d'|' -f2); d_i=$(echo "$line" | cut -d'|' -f3); d_t=$(echo "$line" | cut -d'|' -f4)
-                     echo "• $d_n ($d_i) @ $d_t" >> "$TMP_DIR/d_list"
-                     echo "🔴 $d_n - $d_i - $d_t" >> "$TMP_DIR/t_list"
-                 done
-                 
-                 D_LIST=$(cat "$TMP_DIR/d_list"); rm -f "$TMP_DIR/d_list"
-                 T_LIST=$(cat "$TMP_DIR/t_list"); rm -f "$TMP_DIR/t_list"
-                 
-                 D_MSG="**Router:** $ROUTER_NAME\n**Time:** $CUR_TIME\n\n**Affected Devices:**\n$D_LIST"
-                 T_MSG="🔴 Multiple Devices Down * $ROUTER_NAME - $CUR_TIME
-$T_LIST"
-                 
-                 if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
-                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "Multiple Devices DOWN ($DOWN_COUNT): $CUR_TIME" >> "$SILENT_BUFFER"
-                     fi
-                 else
-                     send_notification "🔴 Multiple Devices Down ($DOWN_COUNT)" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
-                 fi
-            fi
-
-            # 2. Process UP Events
-            UP_COUNT=$(grep -c "^UP" "$BATCH_EVENTS")
-            if [ "$UP_COUNT" -eq 1 ]; then
-                 LINE=$(grep "^UP" "$BATCH_EVENTS")
-                 D_NAME=$(echo "$LINE" | cut -d'|' -f2); D_IP=$(echo "$LINE" | cut -d'|' -f3); D_TIME=$(echo "$LINE" | cut -d'|' -f4)
-                 D_DUR=$(echo "$LINE" | cut -d'|' -f5); D_START=$(echo "$LINE" | cut -d'|' -f6)
-                 
-                 D_MSG="**Router:** $ROUTER_NAME\n**Device:** $D_NAME ($D_IP)\n**Down at:** $D_START\n**Up at:** $D_TIME\n**Outage:** $D_DUR"
-                 T_MSG="🟢 Device UP* $ROUTER_NAME - $D_NAME - $D_IP - $D_TIME - $D_DUR"
-                 
-                 if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
-                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "Device $D_NAME UP: $D_TIME (Down $D_DUR)" >> "$SILENT_BUFFER"
-                     fi
-                 else
-                     send_notification "🟢 Device Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
-                 fi
-            elif [ "$UP_COUNT" -gt 1 ]; then
-                 CUR_TIME=$(date '+%b %d %H:%M:%S')
-                 grep "^UP" "$BATCH_EVENTS" | while IFS= read -r line; do
-                     d_n=$(echo "$line" | cut -d'|' -f2); d_i=$(echo "$line" | cut -d'|' -f3); d_t=$(echo "$line" | cut -d'|' -f4)
-                     d_dur=$(echo "$line" | cut -d'|' -f5)
-                     echo "• $d_n ($d_i) @ $d_t (Outage: $d_dur)" >> "$TMP_DIR/d_list_up"
-                     echo "🟢 $d_n - $d_i - $d_t - $d_dur" >> "$TMP_DIR/t_list_up"
-                 done
-                 
-                 D_LIST=$(cat "$TMP_DIR/d_list_up"); rm -f "$TMP_DIR/d_list_up"
-                 T_LIST=$(cat "$TMP_DIR/t_list_up"); rm -f "$TMP_DIR/t_list_up"
-                 
-                 D_MSG="**Router:** $ROUTER_NAME\n**Time:** $CUR_TIME\n\n**Restored Devices:**\n$D_LIST"
-                 T_MSG="🟢 Multiple Devices UP * $ROUTER_NAME - $CUR_TIME
-$T_LIST"
-                 
-                 if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
-                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "Multiple Devices UP ($UP_COUNT): $CUR_TIME" >> "$SILENT_BUFFER"
-                     fi
-                 else
-                     send_notification "🟢 Multiple Devices Online ($UP_COUNT)" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
-                 fi
-            fi
-
         fi
     fi
     sleep 1
