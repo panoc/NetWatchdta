@@ -37,7 +37,7 @@ echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
-ask_yn "❓ Begin installation?"
+ask_yn "❓ Begin installation V9?"
 [ "$ANSWER_YN" = "n" ] && exit 0
 
 # Paths
