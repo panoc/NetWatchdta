@@ -22,6 +22,42 @@ CYAN='\033[1;36m'   # Light Cyan (Vibrant)
 YELLOW='\033[1;33m' # Bold Yellow
 WHITE='\033[1;37m'  # Bold White
 
+# --- INPUT VALIDATION FUNCTIONS ---
+# These functions ensure the user cannot proceed without valid input.
+
+# Function: ask_yn
+# Description: Loops until user presses 'y', 'Y', 'n', or 'N'.
+# Usage: ask_yn "Question Text"
+ask_yn() {
+    local prompt="$1"
+    while true; do
+        printf "${BOLD}%s [y/n]: ${NC}" "$prompt"
+        read input_val </dev/tty
+        case "$input_val" in
+            y|Y) ANSWER_YN="y"; return 0 ;;
+            n|N) ANSWER_YN="n"; return 1 ;;
+            *) ;; # Do nothing, loop again (ignore invalid input)
+        esac
+    done
+}
+
+# Function: ask_opt
+# Description: Loops until user enters a number between 1 and MAX.
+# Usage: ask_opt "Prompt Text" "Max Option Number"
+ask_opt() {
+    local prompt="$1"
+    local max="$2"
+    while true; do
+        printf "${BOLD}%s [1-%s]: ${NC}" "$prompt" "$max"
+        read input_val </dev/tty
+        if echo "$input_val" | grep -qE "^[1-$max]$"; then
+            ANSWER_OPT="$input_val"
+            break
+        fi
+        # If invalid, loop again silently
+    done
+}
+
 # --- INITIAL HEADER ---
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
@@ -30,9 +66,9 @@ echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
-printf "${BOLD}❓ This will begin the installation process. Continue? [y/n]: ${NC}"
-read start_confirm </dev/tty
-if [ "$start_confirm" != "y" ] && [ "$start_confirm" != "Y" ]; then
+# Strict check: only y/n allowed
+ask_yn "❓ This will begin the installation process. Continue?"
+if [ "$ANSWER_YN" = "n" ]; then
     echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
 fi
@@ -82,10 +118,9 @@ if [ -n "$MISSING_DEPS" ]; then
         exit 1
     else
         echo -e "${GREEN}✅ Sufficient Flash space found: $((FREE_FLASH_KB / 1024))MB available.${NC}"
-        printf "${BOLD}❓ Download missing dependencies? [y/n]: ${NC}"
-        read install_deps_confirm </dev/tty
+        ask_yn "❓ Download missing dependencies?"
         
-        if [ "$install_deps_confirm" = "y" ] || [ "$install_deps_confirm" = "Y" ]; then
+        if [ "$ANSWER_YN" = "y" ]; then
              echo -e "${YELLOW}📥 Updating package lists...${NC}"
              opkg update --no-check-certificate > /dev/null 2>&1
              
@@ -116,10 +151,9 @@ if [ -f "$CONFIG_FILE" ]; then
     echo -e "\n${YELLOW}⚠️  Existing installation found.${NC}"
     echo -e "${BOLD}${WHITE}1.${NC} Keep settings (Upgrade)"
     echo -e "${BOLD}${WHITE}2.${NC} Clean install"
-    printf "${BOLD}Enter choice [1-2]: ${NC}"
-    read choice </dev/tty
+    ask_opt "Enter choice" "2"
     
-    if [ "$choice" = "1" ]; then
+    if [ "$ANSWER_OPT" = "1" ]; then
         echo -e "${CYAN}🔧 Upgrading logic while keeping settings...${NC}"
         KEEP_CONFIG=1
     else
@@ -139,16 +173,16 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     printf "${BOLD}🏷️  Enter Router Name (e.g., MyRouter): ${NC}"
     read router_name_input </dev/tty
     
-    # --- DISCORD SETUP LOOP ---
+    # --- DISCORD SETUP LOOP (With Verification) ---
     DISCORD_ENABLE_VAL="NO"
     DISCORD_WEBHOOK=""
     DISCORD_USERID=""
     
     echo -e "\n${BLUE}--- Notification Settings ---${NC}"
+    
     while :; do
-        printf "${BOLD}1. Enable Discord Notifications? [y/n]: ${NC}"
-        read discord_choice </dev/tty
-        if [ "$discord_choice" != "y" ] && [ "$discord_choice" != "Y" ]; then
+        ask_yn "1. Enable Discord Notifications?"
+        if [ "$ANSWER_YN" = "n" ]; then
             DISCORD_ENABLE_VAL="NO"
             break
         fi
@@ -161,25 +195,22 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         read DISCORD_USERID </dev/tty
         
         # Ask to test
-        printf "${BOLD}   ❓ Send test notification to Discord now? [y/n]: ${NC}"
-        read test_d </dev/tty
-        if [ "$test_d" = "y" ] || [ "$test_d" = "Y" ]; then
+        ask_yn "   ❓ Send test notification to Discord now?"
+        if [ "$ANSWER_YN" = "y" ]; then
              echo -e "${YELLOW}   🧪 Sending Discord test...${NC}"
              curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK"
              echo ""
-             printf "${BOLD}   ❓ Did you receive the notification? [y/n]: ${NC}"
-             read confirm_d </dev/tty
+             ask_yn "   ❓ Did you receive the notification?"
              
-             if [ "$confirm_d" = "y" ] || [ "$confirm_d" = "Y" ]; then
+             if [ "$ANSWER_YN" = "y" ]; then
                  echo -e "${GREEN}   ✅ Discord configured.${NC}"
                  break
              else
                  echo -e "${RED}   ❌ Test failed.${NC}"
-                 echo -e "   1. Input credentials again"
-                 echo -e "   2. Disable Discord and continue"
-                 printf "${BOLD}   Choice [1-2]: ${NC}"
-                 read retry_d </dev/tty
-                 if [ "$retry_d" = "2" ]; then
+                 echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
+                 echo -e "${BOLD}${WHITE}   2.${NC} Disable Discord and continue"
+                 ask_opt "   Choice" "2"
+                 if [ "$ANSWER_OPT" = "2" ]; then
                      DISCORD_ENABLE_VAL="NO"
                      DISCORD_WEBHOOK=""
                      DISCORD_USERID=""
@@ -193,15 +224,14 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     done
 
-    # --- TELEGRAM SETUP LOOP ---
+    # --- TELEGRAM SETUP LOOP (With Verification) ---
     TELEGRAM_ENABLE_VAL="NO"
     TELEGRAM_BOT_TOKEN=""
     TELEGRAM_CHAT_ID=""
     
     while :; do
-        printf "${BOLD}2. Enable Telegram Notifications? [y/n]: ${NC}"
-        read telegram_choice </dev/tty
-        if [ "$telegram_choice" != "y" ] && [ "$telegram_choice" != "Y" ]; then
+        ask_yn "2. Enable Telegram Notifications?"
+        if [ "$ANSWER_YN" = "n" ]; then
             TELEGRAM_ENABLE_VAL="NO"
             break
         fi
@@ -214,25 +244,22 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         read TELEGRAM_CHAT_ID </dev/tty
         
         # Ask to test
-        printf "${BOLD}   ❓ Send test notification to Telegram now? [y/n]: ${NC}"
-        read test_t </dev/tty
-        if [ "$test_t" = "y" ] || [ "$test_t" = "Y" ]; then
+        ask_yn "   ❓ Send test notification to Telegram now?"
+        if [ "$ANSWER_YN" = "y" ]; then
             echo -e "${YELLOW}   🧪 Sending Telegram test...${NC}"
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🧪 Setup Test - Telegram configured successfully for $router_name_input." >/dev/null 2>&1
             echo ""
-            printf "${BOLD}   ❓ Did you receive the notification? [y/n]: ${NC}"
-            read confirm_t </dev/tty
+            ask_yn "   ❓ Did you receive the notification?"
             
-            if [ "$confirm_t" = "y" ] || [ "$confirm_t" = "Y" ]; then
+            if [ "$ANSWER_YN" = "y" ]; then
                 echo -e "${GREEN}   ✅ Telegram configured.${NC}"
                 break
             else
                 echo -e "${RED}   ❌ Test failed.${NC}"
-                echo -e "   1. Input credentials again"
-                echo -e "   2. Disable Telegram and continue"
-                printf "${BOLD}   Choice [1-2]: ${NC}"
-                read retry_t </dev/tty
-                if [ "$retry_t" = "2" ]; then
+                echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
+                echo -e "${BOLD}${WHITE}   2.${NC} Disable Telegram and continue"
+                ask_opt "   Choice" "2"
+                if [ "$ANSWER_OPT" = "2" ]; then
                     TELEGRAM_ENABLE_VAL="NO"
                     TELEGRAM_BOT_TOKEN=""
                     TELEGRAM_CHAT_ID=""
@@ -244,8 +271,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             break
         fi
     done
-    
-    # Notify User of choice
+# Notify User of choice
     echo -e "\n${BOLD}${WHITE}Selected Notification Strategy:${NC}"
     if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ "$TELEGRAM_ENABLE_VAL" = "YES" ]; then
         echo -e "   • ${GREEN}BOTH (Redundant)${NC}"
@@ -263,10 +289,9 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     user_silent_end="07"
     
     echo -e "\n${BLUE}--- Silent Hours (Mute Alerts) ---${NC}"
-    printf "${BOLD}🌙 Enable Silent Hours? [y/n]: ${NC}"
-    read enable_silent_choice </dev/tty
+    ask_yn "🌙 Enable Silent Hours?"
     
-    if [ "$enable_silent_choice" = "y" ] || [ "$enable_silent_choice" = "Y" ]; then
+    if [ "$ANSWER_YN" = "y" ]; then
         SILENT_ENABLE_VAL="YES"
         while :; do
             printf "${BOLD}   > Start Hour (0-23): ${NC}"
@@ -291,9 +316,8 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     # Heartbeat
     HB_VAL="NO"; HB_SEC="86400"; HB_MENTION="NO"
     echo -e "\n${BLUE}--- Heartbeat Settings ---${NC}"
-    printf "${BOLD}💓 Enable Heartbeat (System check-in)? [y/n]: ${NC}"
-    read hb_enabled </dev/tty
-    if [ "$hb_enabled" = "y" ] || [ "$hb_enabled" = "Y" ]; then
+    ask_yn "💓 Enable Heartbeat (System check-in)?"
+    if [ "$ANSWER_YN" = "y" ]; then
         HB_VAL="YES"
         printf "${BOLD}   > Interval in HOURS (e.g., 24): ${NC}"
         read hb_hours </dev/tty
@@ -304,9 +328,8 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
              HB_SEC=86400 # Default fallback
         fi
         
-        printf "${BOLD}   > Mention in Heartbeat? [y/n]: ${NC}"
-        read hb_m </dev/tty
-        [ "$hb_m" = "y" ] || [ "$hb_m" = "Y" ] && HB_MENTION="YES"
+        ask_yn "   > Mention in Heartbeat?"
+        [ "$ANSWER_YN" = "y" ] && HB_MENTION="YES"
     fi
 
     # Monitoring Mode
@@ -315,16 +338,9 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e "${BOLD}${WHITE}2.${NC} Device Connectivity only: Pings local network"
     echo -e "${BOLD}${WHITE}3.${NC} Internet Connectivity only: Pings external IP"
     
-    while :; do
-        printf "${BOLD}Enter choice [1-3]: ${NC}"
-        read mode_choice </dev/tty
-        case "$mode_choice" in
-            1|2|3) break ;;
-            *) echo -e "${RED}❌ Invalid choice. Try again.${NC}" ;;
-        esac
-    done
+    ask_opt "Enter choice" "3"
 
-    case "$mode_choice" in
+    case "$ANSWER_OPT" in
         2) EXT_VAL="NO";  DEV_VAL="YES" ;;
         3) EXT_VAL="YES"; DEV_VAL="NO"  ;;
         *) EXT_VAL="YES"; DEV_VAL="YES" ;;
@@ -380,6 +396,7 @@ EOF
     LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
     [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
 fi
+
 # --- 4. SECURITY & VAULT GENERATION ---
 echo -e "\n${CYAN}🔐 Securing credentials...${NC}"
 
@@ -509,12 +526,7 @@ send_notification() {
 
     # 2. TELEGRAM
     if [ "$TELEGRAM_ENABLE" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-        # Format for Telegram (Convert Markdown to simple text or HTML if needed, here keeping simple)
-        # Replacing common markdown bold ** with empty string or keep as is. Telegram parsing depends on mode.
-        # We will use simple text concatenation.
         local t_msg="$title - $desc"
-        # Sanitize newlines for URL
-        # Using curl --data-urlencode is safer
         curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d chat_id="$TELEGRAM_CHAT_ID" \
             -d text="$title
@@ -524,7 +536,6 @@ $desc" >/dev/null 2>&1
     # Clear credentials from RAM
     unset DISCORD_WEBHOOK DISCORD_USERID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
 }
-
 # --- MAIN LOOP ---
 while true; do
     load_config
@@ -618,7 +629,6 @@ while true; do
     # --- DEVICE CHECK (Parallel) ---
     if [ "$DEVICE_MONITOR" = "YES" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
-        # Read file into memory to loop
         grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
             (
                 TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
@@ -641,9 +651,6 @@ while true; do
                         if [ "$SILENT_ENABLE" = "YES" ] && [ "$IS_SILENT" -eq 1 ]; then
                              echo "Device $NAME UP: $(date '+%b %d %H:%M:%S') (Down $DR_STR)" >> "$SILENT_BUFFER"
                         else
-                             # Using load_credentials handled inside send_notification, but since we are in subshell,
-                             # we need to ensure the parent environment or reloading works. 
-                             # Since send_notification re-loads from file, it works in subshell.
                              send_notification "🟢 Device Online" "$D_MSG" "3066993" "SUCCESS"
                         fi
                         rm -f "$FD" "$FT"
@@ -669,11 +676,11 @@ while true; do
         done
         wait
     fi
-
     sleep 1
 done
 EOF
 chmod +x "$INSTALL_DIR/netwatchda.sh"
+
 # --- 6. SERVICE SETUP (PROCD) ---
 echo -e "\n${CYAN}⚙️  Configuring system service...${NC}"
 cat <<EOF > "$SERVICE_PATH"
@@ -681,7 +688,6 @@ cat <<EOF > "$SERVICE_PATH"
 START=99
 USE_PROCD=1
 
-# Command Definitions
 extra_command "status" "Check if monitor is running"
 extra_command "logs" "View last 20 log entries"
 extra_command "clear" "Clear the log file"
@@ -729,11 +735,6 @@ clear() {
 # Helper to source functions for manual commands
 load_functions() {
     if [ -f "$INSTALL_DIR/netwatchda.sh" ]; then
-        # Grep functions out of the core script safely
-        # Ideally we just source it, but the loop runs immediately.
-        # We rely on the fact that core script defines functions first.
-        # However, simpler to replicate the send logic for test commands or use a separate lib.
-        # For this implementation, we will duplicate the bare minimum load logic here for robustness.
         . "$INSTALL_DIR/nwda_settings.conf" 2>/dev/null
     fi
 }
@@ -920,8 +921,7 @@ echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Quick Commands:${NC}"
 echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchda purge${NC}"
 echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchda credentials${NC}"
-echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
-echo -e "  Edit IP List     : ${CYAN}$IP_LIST_FILE${NC}"
-echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchda restart${NC}"
-echo ""
+echo -e "  Edit Settings   : ${CYAN}$CONFIG_FILE${NC}"
+echo -e "  Edit IP List    : ${CYAN}$IP_LIST_FILE${NC}"
+echo -e "  Restart         : ${YELLOW}/etc/init.d/netwatchda restart${NC}"
 echo ""
