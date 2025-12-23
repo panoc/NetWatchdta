@@ -77,7 +77,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} dasdsadadsadaas(by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} 12981 (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -639,9 +639,8 @@ send_payload() {
     # 1. DISCORD
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
-             # Use standard desc for Discord
-             # Ensure proper JSON formatting for description
-             # Replace literal newlines with \n for JSON
+             # Ensure JSON description is safe (newlines handled by shell expansion in main logic)
+             # But we double check escaping here for safety
              local json_desc=$(echo "$desc" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
              
              if curl -s -k -f -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1; then
@@ -713,15 +712,15 @@ send_notification() {
         local clean_desc=$(echo "$desc" | sed ':a;N;$!ba;s/\n/__BR__/g')
         local clean_tel=$(echo "$tel_text" | sed ':a;N;$!ba;s/\n/__BR__/g')
         
+        # Use ||| as delimiter
         echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}" >> "$OFFLINE_BUFFER"
         log_msg "[BUFFER] Internet Down. Notification buffered." "UPTIME"
         return
     fi
 
-    # Try sending (creds must be loaded)
+    # Try sending
     if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text"; then
-        # If CURL fails despite status being UP, buffer it as safety net
-        # Check Buffer Size (5KB Limit)
+        # If CURL fails despite status being UP, buffer it
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
              log_msg "[BUFFER] Buffer full (5KB). Send failed & dropped." "UPTIME"
         else
@@ -739,19 +738,30 @@ flush_buffer() {
         log_msg "[SYSTEM] Internet Restored. Flushing buffer..." "UPTIME"
         
         # Read file line by line
-        while IFS= read -r line; do
-             # Split by ||| delimiter
-             local b_title=$(echo "$line" | awk -F'|||' '{print $1}')
-             local b_desc_raw=$(echo "$line" | awk -F'|||' '{print $2}')
-             local b_color=$(echo "$line" | awk -F'|||' '{print $3}')
-             local b_filter=$(echo "$line" | awk -F'|||' '{print $4}')
-             local b_tel_raw=$(echo "$line" | awk -F'|||' '{print $5}')
+        # Using sed to convert ||| to tabs for safer read if needed, but awk handles it fine if strict.
+        # We will use the robust sed replacement approach to ensure splitting works
+        
+        while read -r line; do
+             # Use sed to extract fields based on ||| delimiter
+             # Field 1: Title
+             local b_title=$(echo "$line" | awk -F '\\|\\|\\|' '{print $1}')
+             # Field 2: Desc (Raw)
+             local b_desc_raw=$(echo "$line" | awk -F '\\|\\|\\|' '{print $2}')
+             # Field 3: Color
+             local b_color=$(echo "$line" | awk -F '\\|\\|\\|' '{print $3}')
+             # Field 4: Filter
+             local b_filter=$(echo "$line" | awk -F '\\|\\|\\|' '{print $4}')
+             # Field 5: Telegram Text (Raw)
+             local b_tel_raw=$(echo "$line" | awk -F '\\|\\|\\|' '{print $5}')
              
              # Restore newlines from __BR__ placeholder
-             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\n/g')
+             # For Discord (JSON), we need literal '\n' string (double escaped)
+             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\\n/g')
+             
+             # For Telegram (Text), we need actual newlines
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              
-             sleep 1 # Maintain delay for buffered messages too
+             sleep 1 
              send_payload "$b_title" "$b_desc" "$b_color" "$b_filter" "$b_tel"
         done < "$OFFLINE_BUFFER"
         
@@ -787,7 +797,6 @@ while true; do
                 HB_MSG="$HB_MSG\n<@$DISCORD_USERID>"
             fi
             
-            # Target Filter
             TARGET=${HB_TARGET:-BOTH}
             send_notification "💓 Heartbeat Report" "$HB_MSG" "1752220" "INFO" "$TARGET" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN"
             log_msg "[$ROUTER_NAME] Heartbeat sent ($TARGET)." "UPTIME"
@@ -835,14 +844,13 @@ $SUMMARY_CONTENT"
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                 if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
-                    # CRITICAL: SET STATUS DOWN
-                    echo "DOWN" > "$NET_STATUS_FILE"
+                    echo "DOWN" > "$NET_STATUS_FILE" # Critical for buffering
                     
                     log_msg "[ALERT] [$ROUTER_NAME] INTERNET DOWN" "UPTIME"
                     
                     if [ "$IS_SILENT" -ne 0 ]; then
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then
-                             : # Drop
+                             : 
                          else
                              echo "Internet Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                          fi
@@ -850,30 +858,26 @@ $SUMMARY_CONTENT"
                 fi
             else
                 if [ -f "$FD" ]; then
-                    # CRITICAL: SET STATUS UP
-                    echo "UP" > "$NET_STATUS_FILE"
+                    echo "UP" > "$NET_STATUS_FILE" # Critical: Set UP before sending restore
                     
                     START_TIME=$(cat "$FT"); START_SEC=$(cat "$FD")
                     DURATION_SEC=$((NOW_SEC - START_SEC))
                     DR="$((DURATION_SEC/60))m $((DURATION_SEC%60))s"
                     
-                    # DISCORD FORMAT
                     MSG_D="**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
-                    
-                    # TELEGRAM FORMAT
                     MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - $START_TIME - $NOW_HUMAN - $DR"
                     
                     log_msg "[SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" "UPTIME"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # 1. SEND INTERNET RESTORED NOTIFICATION
+                        # 1. Force Send Internet Restored
                         send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T"
                         
-                        # 2. FLUSH BUFFER (Send queued device alerts)
+                        # 2. Flush Device Alerts
                         flush_buffer
                     else
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then
-                             : # Drop
+                             : 
                          else
                              echo -e "Internet Restored: $NOW_HUMAN (Down $DR)" >> "$SILENT_BUFFER"
                          fi
