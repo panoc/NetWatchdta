@@ -59,6 +59,39 @@ MIN_RAM_KB=2048 # 2MB min for operation
 MISSING_PKGS=""
 if ! command -v curl >/dev/null 2>&1; then MISSING_PKGS="$MISSING_PKGS curl"; fi
 if ! command -v openssl >/dev/null 2>&1; then MISSING_PKGS="$MISSING_PKGS openssl-util"; fi
+if ! command -v bc >/dev/null 2>&1; then MISSING_PKGS="$MISSING_PKGS bc"; fi
+if ! command -v pgrep >/dev/null 2>&1; then MISSING_PKGS="$MISSING_PKGS procps-ng-pgrep"; fi
+# Check specifically for CA Certificates
+if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then MISSING_PKGS="$MISSING_PKGS ca-bundle"; fi
+
+if [ -n "$MISSING_PKGS" ]; then
+    echo -e "${YELLOW}⚠️  Missing dependencies:${BOLD}$MISSING_PKGS${NC}"
+    
+    # Calculate required space roughly (approx 2.5MB for all these)
+    FREE_FLASH_KB=$(df / | awk 'NR==2 {print $4}')
+    if [ "$FREE_FLASH_KB" -lt 3000 ]; then
+        echo -e "${RED}❌ ERROR: Insufficient Flash storage! ($((FREE_FLASH_KB / 1024))MB available)${NC}"
+        exit 1
+    fi
+
+    printf "${BOLD}📥 Download and install $MISSING_PKGS? [y/n]: ${NC}"
+    read install_dep_choice </dev/tty
+    if [ "$install_dep_choice" = "y" ] || [ "$install_dep_choice" = "Y" ]; then
+        echo -e "${CYAN}🔄 Updating package lists and installing...${NC}"
+        opkg update >/dev/null 2>&1
+        # Install quietly but show errors
+        opkg install $MISSING_PKGS > /tmp/opkg_log 2>&1
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Error during installation:${NC}"
+            cat /tmp/opkg_log
+            exit 1
+        fi
+        echo -e "${GREEN}✅ Dependencies installed successfully.${NC}"
+    else
+        echo -e "${RED}❌ Aborted. These packages are required for notifications and logic.${NC}"
+        exit 1
+    fi
+fi
 
 # RAM Guard
 if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
