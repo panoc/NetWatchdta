@@ -1,9 +1,10 @@
 #!/bin/sh
-# netwatchda Ultimate Installer - Hardened Network Monitoring for OpenWrt
+# netwatchda Installer - Automated Setup for OpenWrt
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
 
 # --- SELF-CLEAN LOGIC ---
+# This ensures the installer script deletes itself after execution
 SCRIPT_NAME="$0"
 cleanup() {
     rm -f "$SCRIPT_NAME"
@@ -14,361 +15,587 @@ trap cleanup INT TERM EXIT
 # --- COLOR DEFINITIONS ---
 NC='\033[0m'       
 BOLD='\033[1m'
-WHITE_BOLD='\033[1;37m'
-RED='\033[1;31m'    
-GREEN='\033[1;32m'  
-BLUE='\033[1;34m'   
-CYAN='\033[1;36m'   
-YELLOW='\033[1;33m' 
-
-# --- PATHS ---
-INSTALL_DIR="/root/netwatchda"
-CONFIG_FILE="$INSTALL_DIR/nwda_settings.conf"
-IP_LIST_FILE="$INSTALL_DIR/nwda_ips.conf"
-VAULT_FILE="$INSTALL_DIR/.vault.enc"
-SEED_FILE="$INSTALL_DIR/.seed"
-SERVICE_PATH="/etc/init.d/netwatchda"
-LOG_DIR="/tmp/netwatchda"
-UPTIME_LOG="$LOG_DIR/nwda_uptime.log"
-PING_LOG="$LOG_DIR/nwda_ping.log"
+RED='\033[1;31m'    # Light Red
+GREEN='\033[1;32m'  # Light Green
+BLUE='\033[1;34m'   # Light Blue (Vibrant)
+CYAN='\033[1;36m'   # Light Cyan (Vibrant)
+YELLOW='\033[1;33m' # Bold Yellow
 
 # --- INITIAL HEADER ---
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchda Ultimate Setup${NC} (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
-while :; do
-    printf "${BOLD}❓ This will begin the installation process. Continue? [y/n]: ${NC}"
-    read -r start_confirm </dev/tty
-    case "$start_confirm" in
-        [Yy]*) break ;;
-        [Nn]*) echo -e "${RED}❌ Installation aborted. Cleaning up...${NC}"; exit 0 ;;
-        *) echo -e "${YELLOW}Please enter y or n.${NC}" ;;
-    esac
-done
+printf "${BOLD}❓ This will begin the installation process. Continue? [y/n]: ${NC}"
+read start_confirm </dev/tty
+if [ "$start_confirm" != "y" ] && [ "$start_confirm" != "Y" ]; then
+    echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
+    exit 0
+fi
 
-# --- 1. SYSTEM READINESS & DEPENDENCIES ---
+INSTALL_DIR="/root/netwatchda"
+CONFIG_FILE="$INSTALL_DIR/netwatchda_settings.conf"
+IP_LIST_FILE="$INSTALL_DIR/netwatchda_ips.conf"
+README_FILE="$INSTALL_DIR/README.txt"
+SERVICE_NAME="netwatchda"
+SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
+LOGFILE="/tmp/netwatchda_log.txt"
+
+# --- 1. CHECK DEPENDENCIES & STORAGE (FLASH & RAM) ---
 echo -e "\n${BOLD}📦 Checking system readiness...${NC}"
 
-install_pkg() {
-    echo -ne "${CYAN}📥 Installing $1... [          ]\r"
-    opkg update > /dev/null 2>&1
-    echo -ne "${CYAN}📥 Installing $1... [#####     ]\r"
-    opkg install "$1" > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}📥 Installing $1... [##########] Done.${NC}"
-    else
-        echo -e "${RED}❌ Failed to install $1. Check internet connection.${NC}"
-        exit 1
-    fi
-}
+# Flash Storage Check (Root partition)
+FREE_FLASH_KB=$(df / | awk 'NR==2 {print $4}')
+MIN_FLASH_KB=3072 # 3MB Threshold
 
-command -v curl >/dev/null 2>&1 || install_pkg "curl ca-bundle"
-command -v openssl >/dev/null 2>&1 || install_pkg "openssl-util"
+# RAM Check (/tmp partition)
+FREE_RAM_KB=$(df /tmp | awk 'NR==2 {print $4}')
+MIN_RAM_KB=512 # 512KB Threshold
+DEFAULT_MAX_LOG=51200 # Default 50KB for log size (51200 bytes)
+
+if ! command -v curl >/dev/null 2>&1; then
+    echo -e "${CYAN}🔍 curl not found. Checking flash storage...${NC}"
+    if [ "$FREE_FLASH_KB" -lt "$MIN_FLASH_KB" ]; then
+        echo -e "${RED}❌ ERROR: Insufficient Flash storage!${NC}"
+        echo -e "${YELLOW}Available: $((FREE_FLASH_KB / 1024))MB | Required: 3MB${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}✅ Sufficient Flash space found: $((FREE_FLASH_KB / 1024))MB available.${NC}"
+        echo -e "${YELLOW}📥 Attempting to install curl and ca-bundle...${NC}"
+        opkg update && opkg install curl ca-bundle
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Error: Failed to install curl. Aborting.${NC}"
+            exit 1
+        fi
+    fi
+else
+    echo -e "${GREEN}✅ curl is already installed.${NC}"
+    echo -e "${GREEN}✅ Flash storage check passed: $((FREE_FLASH_KB / 1024))MB available.${NC}"
+fi
+
+# Determine Log size based on RAM availability (RAM Guard Logic)
+if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
+    echo -e "${YELLOW}⚠️  Low RAM detected in /tmp ($FREE_RAM_KB KB).${NC}"
+    echo -e "${CYAN}📉 Scaling down log rotation size to 10KB for system stability.${NC}"
+    DEFAULT_MAX_LOG=10240 # 10KB (10240 bytes)
+else
+    echo -e "${GREEN}✅ Sufficient RAM for standard logging ($FREE_RAM_KB KB available).${NC}"
+fi
+
+# --- 2. SMART UPGRADE / INSTALL CHECK ---
+KEEP_CONFIG=0
+if [ -f "$CONFIG_FILE" ]; then
+    echo -e "\n${YELLOW}⚠️  Existing installation found.${NC}"
+    echo -e "${BOLD}1.${NC} Keep settings (Upgrade)"
+    echo -e "${BOLD}2.${NC} Clean install"
+    printf "${BOLD}Enter choice [1-2]: ${NC}"
+    read choice </dev/tty
+    
+    if [ "$choice" = "1" ]; then
+        echo -e "${CYAN}🔧 Scanning for missing configuration lines...${NC}"
+        
+        add_if_missing() {
+            if ! grep -q "^$1=" "$CONFIG_FILE"; then
+                echo "$1=$2 $3" >> "$CONFIG_FILE"
+                echo -e "  ${GREEN}➕ Added missing line:${NC} $1"
+            fi
+        }
+
+        add_if_missing "ROUTER_NAME" "\"My_OpenWrt_Router\"" "# Name that appears in Discord notifications."
+        add_if_missing "DISCORD_URL" "\"\"" "# Your Discord Webhook URL."
+        add_if_missing "MY_ID" "\"\"" "# Your Discord User ID (for @mentions)."
+        add_if_missing "MAX_SIZE" "$DEFAULT_MAX_LOG" "# Max log file size in bytes for the log rotation."
+        add_if_missing "HEARTBEAT" "\"OFF\"" "# Set to ON to receive a periodic check-in message."
+        add_if_missing "HB_INTERVAL" "86400" "# Interval in seconds. Default is 86400"
+        add_if_missing "HB_MENTION" "\"OFF\"" "# Set to ON to include @mention in heartbeats."
+        add_if_missing "EXT_PING_COUNT" "4" "# Number of pings per internet check interval. Default 4."
+        add_if_missing "EXT_SCAN_INTERVAL" "60" "# Seconds between internet checks. Default is 60."
+        add_if_missing "EXT_FAIL_THRESHOLD" "1" "# Failed cycles before alert. Default 1."
+        add_if_missing "EXT_IP" "\"1.1.1.1\"" "# External IP to ping. Leave empty to disable."
+        add_if_missing "EXT_IP2" "\"8.8.8.8\"" "# Secondary External IP for redundancy."
+        add_if_missing "DEVICE_MONITOR" "\"ON\"" "# Set to ON to enable local IP monitoring."
+        add_if_missing "DEV_PING_COUNT" "4" "# Number of pings per device check interval. Default 4."
+        add_if_missing "DEV_SCAN_INTERVAL" "10" "# Seconds between device pings. Default is 10."
+        add_if_missing "DEV_FAIL_THRESHOLD" "3" "# Failed cycles before alert. Default 3."
+        add_if_missing "SILENT_ENABLE" "\"OFF\"" "# Set to ON to enable silent hours mode."
+        add_if_missing "SILENT_START" "23" "# Hour to start silent mode (0-23)."
+        add_if_missing "SILENT_END" "07" "# Hour to end silent mode (0-23)."
+
+        echo -e "${GREEN}✅ Configuration patch complete.${NC}"
+        KEEP_CONFIG=1
+    else
+        echo -e "${RED}🧹 Performing clean install...${NC}"
+        /etc/init.d/netwatchda stop 2>/dev/null
+        rm -rf "$INSTALL_DIR"
+    fi
+fi
 
 mkdir -p "$INSTALL_DIR"
-mkdir -p "$LOG_DIR"
 
-# --- 2. HARDWARE LOCK GENERATION ---
-if [ ! -f "$SEED_FILE" ]; then
-    head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 > "$SEED_FILE"
-fi
-
-get_hw_key() {
-    CPU_ID=$(grep -m1 "serial" /proc/cpuinfo | awk '{print $3}')
-    [ -z "$CPU_ID" ] && CPU_ID=$(cat /sys/class/net/eth0/address 2>/dev/null || echo "NWDA_V1_KEY")
-    SEED=$(cat "$SEED_FILE")
-    echo "${CPU_ID}${SEED}" | sha256sum | awk '{print $1}'
-}
-
-# --- 3. NOTIFICATION STRATEGY MENU ---
-echo -e "\n${BLUE}--- Notification Strategy ---${NC}"
-echo -e "1. ${WHITE_BOLD}Enable Discord Notifications${NC}"
-echo -e "2. ${WHITE_BOLD}Enable Telegram Notifications${NC}"
-echo -e "3. ${WHITE_BOLD}Enable Both${NC}"
-echo -e "4. ${WHITE_BOLD}None (In this case user should be informed that events can only be tracked through logs)${NC}"
-
-while :; do
-    printf "${BOLD}Enter choice [1-4]: ${NC}"
-    read -r notify_choice </dev/tty
-    case "$notify_choice" in
-        1|2|3|4) break ;;
-        *) echo -e "${RED}❌ Invalid selection. Please enter 1-4.${NC}" ;;
-    esac
-done
-
-D_EN="NO"; T_EN="NO"
-D_URL=""; D_ID=""; T_TOK=""; T_ID=""
-
-if [ "$notify_choice" = "1" ] || [ "$notify_choice" = "3" ]; then
-    D_EN="YES"
+# --- 3. CLEAN INSTALL INPUTS ---
+if [ "$KEEP_CONFIG" -eq 0 ]; then
+    echo -e "\n${BLUE}--- Configuration ---${NC}"
     printf "${BOLD}🔗 Enter Discord Webhook URL: ${NC}"
-    read -r D_URL </dev/tty
+    read user_webhook </dev/tty
     printf "${BOLD}👤 Enter Discord User ID (for @mentions): ${NC}"
-    read -r D_ID </dev/tty
-fi
+    read user_id </dev/tty
+    printf "${BOLD}🏷️  Enter Router Name (e.g., MyRouter): ${NC}"
+    read router_name_input </dev/tty
 
-if [ "$notify_choice" = "2" ] || [ "$notify_choice" = "3" ]; then
-    T_EN="YES"
-    printf "${BOLD}🤖 Enter Telegram Bot Token: ${NC}"
-    read -r T_TOK </dev/tty
-    printf "${BOLD}🆔 Enter Telegram Chat ID: ${NC}"
-    read -r T_ID </dev/tty
-fi
+    echo -e "\n${BLUE}--- Silent Hours (No Discord Alerts) ---${NC}"
+    printf "${BOLD}🌙 Enable Silent Hours? [y/n]: ${NC}"
+    read enable_silent_choice </dev/tty
+    
+    if [ "$enable_silent_choice" = "y" ] || [ "$enable_silent_choice" = "Y" ]; then
+        SILENT_VAL="ON"
+        while :; do
+            printf "${BOLD}   > Start Hour (24H Format 0-23, e.g., 23 for 11PM): ${NC}"
+            read user_silent_start </dev/tty
+            if echo "$user_silent_start" | grep -qE '^[0-9]+$' && [ "$user_silent_start" -ge 0 ] && [ "$user_silent_start" -le 23 ] 2>/dev/null; then
+                break
+            else
+                echo -e "${RED}   ❌ Invalid hour. Use 24H format (0-23).${NC}"
+            fi
+        done
+        while :; do
+            printf "${BOLD}   > End Hour (24H Format 0-23, e.g., 07 for 7AM): ${NC}"
+            read user_silent_end </dev/tty
+            if echo "$user_silent_end" | grep -qE '^[0-9]+$' && [ "$user_silent_end" -ge 0 ] && [ "$user_silent_end" -le 23 ] 2>/dev/null; then
+                break
+            else
+                echo -e "${RED}   ❌ Invalid hour. Use 24H format (0-23).${NC}"
+            fi
+        done
+    else
+        SILENT_VAL="OFF"; user_silent_start="23"; user_silent_end="07"
+    fi
+    
+    # --- TEST NOTIFICATION ---
+    echo -e "\n${CYAN}🧪 Sending initial test notification...${NC}"
+    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"📟 Router Setup\", \"description\": \"Basic connectivity test successful for **$router_name_input**! <@$user_id>\", \"color\": 1752220}]}" "$user_webhook" > /dev/null
+    
+    printf "${BOLD}❓ Received basic notification on Discord? [y/n]: ${NC}"
+    read confirm_test </dev/tty
+    if [ "$confirm_test" != "y" ] && [ "$confirm_test" != "Y" ]; then
+        echo -e "${RED}❌ Aborted. Check your Webhook URL.${NC}"
+        exit 1
+    fi
 
-# --- 4. MONITORING MODE SELECTION ---
-echo -e "\n${BLUE}--- Monitoring Mode ---${NC}"
-echo -e "1. ${WHITE_BOLD}Aggressive${NC} (Check every 10s, Alert after 1 failure)"
-echo -e "2. ${WHITE_BOLD}Balanced${NC} (Check every 60s, Alert after 3 failures)"
-echo -e "3. ${WHITE_BOLD}Power Saver${NC} (Check every 5m, Alert after 5 failures)"
+    echo -e "\n${BLUE}--- Heartbeat Settings ---${NC}"
+    printf "${BOLD}💓 Enable Heartbeat (System check-in)? [y/n]: ${NC}"
+    read hb_enabled </dev/tty
+    if [ "$hb_enabled" = "y" ] || [ "$hb_enabled" = "Y" ]; then
+        HB_VAL="ON"
+        printf "${BOLD}⏰ Interval in HOURS (e.g., 24): ${NC}"
+        read hb_hours </dev/tty
+        HB_SEC=$((hb_hours * 3600))
+        printf "${BOLD}🔔 Mention in Heartbeat? [y/n]: ${NC}"
+        read hb_m </dev/tty
+        [ "$hb_m" = "y" ] || [ "$hb_m" = "Y" ] && HB_MENTION="ON" || HB_MENTION="OFF"
+    else
+        HB_VAL="OFF"; HB_SEC="86400"; HB_MENTION="OFF"
+    fi
 
-while :; do
+    echo -e "\n${BLUE}--- Monitoring Mode ---${NC}"
+    echo "1. Both: Full monitoring (Default)"
+    echo "2. Device Connectivity only: Pings local network"
+    echo "3. Internet Connectivity only: Pings external IP"
     printf "${BOLD}Enter choice [1-3]: ${NC}"
-    read -r mode_choice </dev/tty
+    read mode_choice </dev/tty
+
     case "$mode_choice" in
-        1) E_INT=10; D_INT=5; E_FAIL=1; D_FAIL=1; break ;;
-        2) E_INT=60; D_INT=10; E_FAIL=1; D_FAIL=3; break ;;
-        3) E_INT=300; D_INT=60; E_FAIL=3; D_FAIL=5; break ;;
-        *) echo -e "${RED}❌ Invalid selection.${NC}" ;;
+        2) EXT_VAL="";        DEV_VAL="ON"  ;;
+        3) EXT_VAL="1.1.1.1"; DEV_VAL="OFF" ;;
+        *) EXT_VAL="1.1.1.1"; DEV_VAL="ON"  ;;
     esac
-done
 
-# --- 5. ENCRYPTION VAULT CREATION ---
-HW_KEY=$(get_hw_key)
-echo "D_URL='$D_URL'
-D_ID='$D_ID'
-T_TOK='$T_TOK'
-T_ID='$T_ID'" | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -out "$VAULT_FILE"
+# --- BASE CODE (DO NOT CHANGE) ---
+DEV_COUNT=4 # Number of pings to send to devices
+EXT_COUNT=4 # Number of pings to send to external sites
+# --- END BASE CODE ---
 
-# --- 6. SETTINGS GENERATOR ---
-cat <<EOF > "$CONFIG_FILE"
-# nwda_settings.conf - Configuration for netwatchda
-# Note: Discord/Telegram tokens are stored encrypted in .vault.enc
-
-[Log settings]
-UPTIME_LOG_MAX_SIZE=51200 # Max log file size in bytes for uptime tracking. Default is 51200.
-PING_LOG_ENABLE="NO" # Enable or disable detailed ping logging (YES/NO). Default is NO.
+    cat <<EOF > "$CONFIG_FILE"
+[Router Identification]
+ROUTER_NAME="$router_name_input" # Name that appears in Discord notifications.
 
 [Discord Settings]
-DISCORD_ENABLE="$D_EN" # Global toggle for Discord notifications (YES/NO). Default is NO.
-SILENT_ENABLE="NO" # Mutes Discord alerts during specific hours (YES/NO). Default is NO.
-SILENT_START=23 # Hour to start silent mode (0-23). Default is 23.
-SILENT_END=07 # Hour to end silent mode (0-23). Default is 07.
-
-[TELEGRAM Settings]
-TELEGRAM_ENABLE="$T_EN" # Global toggle for Telegram notifications (YES/NO). Default is NO.
+DISCORD_URL="$user_webhook" # Your Discord Webhook URL.
+MY_ID="$user_id" # Your Discord User ID (for @mentions).
+SILENT_ENABLE="$SILENT_VAL" # Set to ON to enable silent hours mode.
+SILENT_START=$user_silent_start # Hour to start silent mode (24H Format 0-23).
+SILENT_END=$user_silent_end # Hour to end silent mode (24H Format 0-23).
 
 [Monitoring Settings]
-CPU_GUARD_THRESHOLD=2.0 # Max CPU load average allowed before skipping pings. Default is 2.0.
-RAM_GUARD_MIN_FREE=4096 # Minimum free RAM in KB required to run alerts. Default is 4096.
-HEARTBEAT="YES" # Periodic "I am alive" notification (YES/NO). Default is NO.
-HB_INTERVAL=86400 # Seconds between heartbeat messages. Default is 86400.
-HB_MENTION="NO" # Ping User ID in heartbeat messages (YES/NO). Default is NO.
+MAX_SIZE=$DEFAULT_MAX_LOG # Max log file size in bytes for the log rotation.
+
+[Heartbeat Settings]
+HEARTBEAT="$HB_VAL" # Set to ON to receive a periodic check-in message.
+HB_INTERVAL=$HB_SEC # Interval in seconds. Default is 86400
+HB_MENTION="$HB_MENTION" # Set to ON to include @mention in heartbeats.
 
 [Internet Connectivity]
-EXT_ENABLE="YES" # Global toggle for internet monitoring (YES/NO). Default is YES.
-EXT_IP="1.1.1.1" # Primary external IP to monitor. Default is 1.1.1.1.
-EXT_IP2="8.8.8.8" # Secondary external IP for redundancy. Default is 8.8.8.8.
-EXT_SCAN_INTERVAL=$E_INT # Seconds between internet checks.
-EXT_FAIL_THRESHOLD=$E_FAIL # Failed cycles before internet alert.
-EXT_PING_COUNT=4 # Number of packets per internet check. Default is 4.
-EXT_PING_TIMEOUT=1 # Seconds to wait for ping response. Default is 1.
+EXT_IP="$EXT_VAL" # External IP to ping. Leave empty to disable.
+EXT_IP2="8.8.8.8" # Secondary External IP for redundancy.
+EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
+EXT_FAIL_THRESHOLD=1 # Number of failed checks before alert. Default 1.
+EXT_PING_COUNT=$EXT_COUNT # Number of pings per check. Default 4.
 
 [Local Device Monitoring]
-DEVICE_MONITOR="YES" # Enable monitoring of local IPs (YES/NO). Default is YES.
-DEV_SCAN_INTERVAL=$D_INT # Seconds between local device checks.
-DEV_FAIL_THRESHOLD=$D_FAIL # Failed cycles before device alert.
-DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
+DEVICE_MONITOR="$DEV_VAL" # Set to ON to enable local IP monitoring.
+DEV_SCAN_INTERVAL=10 # Seconds between device pings. Default is 10.
+DEV_FAIL_THRESHOLD=3 # Number of failed cycles before alert. Default 3.
+DEV_PING_COUNT=$DEV_COUNT # Number of pings per check. Default 4.
 EOF
 
-[ ! -f "$IP_LIST_FILE" ] && echo "8.8.8.8 @ Google_DNS" > "$IP_LIST_FILE"
+    cat <<EOF > "$IP_LIST_FILE"
+# Format: IP_ADDRESS @ NAME
+# Example: 192.168.1.50 @ Home Server
+EOF
+    
+    LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
+    [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
+fi
 
-# --- 7. LOGIC ENGINE GENERATION (nwda.sh) ---
-cat <<'EOF' > "$INSTALL_DIR/nwda.sh"
+# --- 4. CREATE INITIAL LOG & README ---
+NOW_LOG=$(date '+%b %d, %Y %H:%M:%S')
+echo "$NOW_LOG - [SYSTEM] netwatchda installation successful." > "$LOGFILE"
+
+cat <<EOF > "$README_FILE"
+===========================================================
+🚀 netwatchda - Network Monitoring for OpenWrt
+===========================================================
+Copyright (C) 2025 panoc
+License: GNU GPLv3
+
+A lightweight daemon for monitoring internet connectivity 
+and local network devices with Discord notifications.
+
+--- 📂 DIRECTORY STRUCTURE ---
+All files are located in: /root/netwatchda/
+
+1. netwatchda.sh            - Core monitoring engine.
+2. netwatchda_settings.conf - Main configuration file.
+3. netwatchda_ips.conf      - Local device list.
+4. README.txt               - This manual.
+
+--- ⚙️ SETTINGS.CONF EXPLAINED ---
+
+[Router Identification]
+- ROUTER_NAME: The name shown in Discord titles (e.g., "Home_Router").
+
+[Discord Settings]
+- DISCORD_URL: Your Webhook URL for message delivery.
+- MY_ID: Your numeric Discord User ID. Used for @mentions.
+- SILENT_ENABLE: (ON/OFF) If ON, mutes alerts during specified hours.
+- SILENT_START/END: 24h format (e.g., 23 and 07). 
+  *Note: Outages are bundled into a Summary sent at SILENT_END.*
+
+[Monitoring Settings]
+- MAX_SIZE: Max log size in bytes (e.g., 512000). Once reached, the 
+  log file in /tmp clears itself to save RAM.
+
+[Heartbeat Settings]
+- HEARTBEAT: (ON/OFF) Sends a periodic "I am alive" message.
+- HB_INTERVAL: Seconds between heartbeats (Default 86400 = 24h).
+- HB_MENTION: (ON/OFF) Choose if the heartbeat should ping your @ID.
+
+[Internet Connectivity]
+- EXT_IP: The primary target to ping.
+- EXT_IP2: The secondary target to ping for redundancy.
+- EXT_SCAN_INTERVAL: Seconds between internet checks (Default 60).
+- EXT_FAIL_THRESHOLD: Failed checks needed to trigger a "Down" alert.
+- EXT_PING_COUNT: Number of packets sent per check (Default 4).
+
+[Local Device Monitoring]
+- DEVICE_MONITOR: (ON/OFF) Enable/Disable tracking of local IPs.
+- DEV_SCAN_INTERVAL: Seconds between device checks (Default 10).
+- DEV_FAIL_THRESHOLD: Failed checks needed to trigger alert. 
+  *Tip: Set to 3+ for mobile phones to avoid false sleep-mode alerts.*
+- DEV_PING_COUNT: Number of packets sent per check (Default 4).
+
+--- 📋 DEVICE LIST (ips.conf) ---
+Add devices using the format: IP_ADDRESS @ Device Name
+Example: 192.168.1.15 @ Smart_TV
+
+--- 🎨 NOTIFICATION COLORS ---
+- 🔴 RED (15548997): CRITICAL - Internet or Device is DOWN.
+- 🟢 GREEN (3066993): SUCCESS - Connectivity is RESTORED.
+- 🟡 YELLOW (16776960): WARNING - Manual test triggered.
+- 🔵 CYAN (1752220): INFO - System startup or Heartbeat.
+- 🟣 PURPLE (10181046): SUMMARY - Silent hours report.
+
+--- 🛠️ MANAGEMENT COMMANDS ---
+  /etc/init.d/netwatchda restart  - Apply configuration changes
+  /etc/init.d/netwatchda status   - Check if the daemon is running
+  /etc/init.d/netwatchda logs     - View recent activity history
+  /etc/init.d/netwatchda discord  - Send a Yellow Warning test alert
+  /etc/init.d/netwatchda purge    - Interactive Smart Uninstaller
+===========================================================
+EOF
+
+# --- 5. CORE SCRIPT GENERATION ---
+echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
+cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
-# netwatchda - The Engine
-# Handles pings, state management, silence hours, and redundant alerts.
+# netwatchda - Network Monitoring for OpenWrt
 
-BASE_DIR="/root/netwatchda"
-LOG_DIR="/tmp/netwatchda"
-CONFIG_FILE="$BASE_DIR/nwda_settings.conf"
-IP_LIST_FILE="$BASE_DIR/nwda_ips.conf"
-UPTIME_LOG="$LOG_DIR/nwda_uptime.log"
-PING_LOG="$LOG_DIR/nwda_ping.log"
+BASE_DIR=$(cd "$(dirname "$0")" && pwd)
+IP_LIST_FILE="$BASE_DIR/netwatchda_ips.conf"
+CONFIG_FILE="$BASE_DIR/netwatchda_settings.conf"
+LOGFILE="/tmp/netwatchda_log.txt"
+SILENT_BUFFER="/tmp/nwda_silent_buffer"
 
-mkdir -p "$LOG_DIR"
+# Initialize state variables
+LAST_EXT_CHECK=0
+LAST_DEV_CHECK=0
+LAST_HB_CHECK=$(date +%s)
+[ ! -f "$SILENT_BUFFER" ] && touch "$SILENT_BUFFER"
+[ ! -f "$LOGFILE" ] && touch "$LOGFILE"
 
 load_config() {
-    eval "$(sed '/^\[.*\]/d; s/[[:space:]]*#.*//' "$CONFIG_FILE" | sed 's/=/="/;s/$/"/')"
+    [ -f "$CONFIG_FILE" ] && eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
 }
-
-send_notif() {
-    TITLE="$1"; MSG="$2"; COLOR="$3"
-    NOW_HUMAN=$(date '+%b %d %H:%M:%S')
-    
-    if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$D_URL" ]; then
-        MENTION=""
-        [ "$HB_MENTION" = "YES" ] && [ -n "$D_ID" ] && MENTION="<@$D_ID>"
-        curl -s -H "Content-Type: application/json" -X POST -d "{\"content\": \"$MENTION\", \"embeds\": [{\"title\": \"$TITLE\", \"description\": \"$MSG\n\n**Time:** $NOW_HUMAN\", \"color\": $COLOR}]}" "$D_URL" > /dev/null 2>&1
-    fi
-    
-    if [ "$TELEGRAM_ENABLE" = "YES" ] && [ -n "$T_TOK" ]; then
-        T_TEXT="📟 <b>$TITLE</b>\n$MSG\n\n<b>Time:</b> $NOW_HUMAN"
-        curl -s "https://api.telegram.org/bot$T_TOK/sendMessage?chat_id=$T_ID&parse_mode=HTML&text=$(echo "$T_TEXT" | sed 's/ /%20/g; s/\\n/%0A/g')" > /dev/null 2>&1
-    fi
-}
-
-LAST_EXT_CHECK=0; LAST_DEV_CHECK=0; LAST_HB_CHECK=$(date +%s)
 
 while true; do
     load_config
+    
+    NOW_HUMAN=$(date '+%b %d %H:%M:%S')
     NOW_SEC=$(date +%s)
-    CUR_H=$(date +%H)
+    CUR_HOUR=$(date +%H)
 
-    # 1. Silence Hours Logic
+    # --- HEARTBEAT LOGIC ---
+    if [ "$HEARTBEAT" = "ON" ] && [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
+        LAST_HB_CHECK=$NOW_SEC
+        HB_MSG="💓 **Heartbeat Report**\n**Router:** $ROUTER_NAME\n**Status:** Systems Operational\n**Time:** $NOW_HUMAN"
+        [ "$HB_MENTION" = "ON" ] && HB_MSG="$HB_MSG\n<@$MY_ID>"
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"System Healthy\", \"description\": \"$HB_MSG\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null 2>&1
+        echo "$NOW_HUMAN - [SYSTEM] [$ROUTER_NAME] Heartbeat sent." >> "$LOGFILE"
+    fi
+
+    # --- SILENT MODE LOGIC ---
     IS_SILENT=0
-    if [ "$SILENT_ENABLE" = "YES" ]; then
+    if [ "$SILENT_ENABLE" = "ON" ]; then
         if [ "$SILENT_START" -gt "$SILENT_END" ]; then
-            [ "$CUR_H" -ge "$SILENT_START" ] || [ "$CUR_H" -lt "$SILENT_END" ] && IS_SILENT=1
+            if [ "$CUR_HOUR" -ge "$SILENT_START" ] || [ "$CUR_HOUR" -lt "$SILENT_END" ]; then IS_SILENT=1; fi
         else
-            [ "$CUR_H" -ge "$SILENT_START" ] && [ "$CUR_H" -lt "$SILENT_END" ] && IS_SILENT=1
+            if [ "$CUR_HOUR" -ge "$SILENT_START" ] && [ "$CUR_HOUR" -lt "$SILENT_END" ]; then IS_SILENT=1; fi
         fi
     fi
 
-    # 2. Heartbeat Logic
-    if [ "$HEARTBEAT" = "YES" ] && [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
-        LAST_HB_CHECK=$NOW_SEC
-        send_notif "💓 Heartbeat" "System is alive and monitoring." 1752220
+    # --- SUMMARY TRIGGER ---
+    if [ "$IS_SILENT" -eq 0 ] && [ -s "$SILENT_BUFFER" ]; then
+        SUMMARY_CONTENT=$(cat "$SILENT_BUFFER")
+        CLEAN_SUMMARY=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🌙 Silent Hours Summary\", \"description\": \"**Router:** $ROUTER_NAME\\n$CLEAN_SUMMARY\", \"color\": 10181046}]}" "$DISCORD_URL" > /dev/null 2>&1
+        [ $? -eq 0 ] && > "$SILENT_BUFFER"
     fi
 
-    # 3. Resource Guards
-    CUR_LOAD=$(awk '{print $1}' /proc/loadavg)
-    FREE_MEM=$(free | grep Mem | awk '{print $4}')
-    if [ "$(echo "$CUR_LOAD > $CPU_GUARD_THRESHOLD" | bc)" -eq 1 ] || [ "$FREE_MEM" -lt "$RAM_GUARD_MIN_FREE" ]; then
-        sleep 5; continue
-    fi
-
-    # 4. Internet Connectivity Logic
-    if [ "$EXT_ENABLE" = "YES" ] && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
+    # --- INTERNET CHECK (Dual IP Logic) ---
+    if { [ -n "$EXT_IP" ] || [ -n "$EXT_IP2" ]; } && [ $((NOW_SEC - LAST_EXT_CHECK)) -ge "$EXT_SCAN_INTERVAL" ]; then
         LAST_EXT_CHECK=$NOW_SEC
-        EXT_UP=0
-        ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP" > /dev/null 2>&1 && EXT_UP=1
-        [ "$EXT_UP" -eq 0 ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP2" > /dev/null 2>&1 && EXT_UP=1
-        
         FD="/tmp/nwda_ext_d"; FT="/tmp/nwda_ext_t"; FC="/tmp/nwda_ext_c"
+        
+        EXT_UP=0
+        if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP" > /dev/null 2>&1; then
+            EXT_UP=1
+        elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -W 2 "$EXT_IP2" > /dev/null 2>&1; then
+            EXT_UP=1
+        fi
+
         if [ "$EXT_UP" -eq 0 ]; then
             C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
             if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
-                echo "$NOW_SEC" > "$FD"; date '+%b %d %H:%M:%S' > "$FT"
-                echo "$(cat "$FT") - [ALERT] INTERNET DOWN" >> "$UPTIME_LOG"
-                [ "$IS_SILENT" -eq 0 ] && send_notif "🔴 Internet Down" "Internet connectivity lost." 15548997
+                echo "$NOW_SEC" > "$FD"
+                echo "$NOW_HUMAN" > "$FT"
+                echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] INTERNET DOWN (Targets: $EXT_IP / $EXT_IP2)" >> "$LOGFILE"
+                
+                if [ "$IS_SILENT" -eq 0 ]; then
+                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Internet Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
+                else
+                    echo "🌐 Internet Outage: $NOW_HUMAN" >> "$SILENT_BUFFER"
+                fi
             fi
         else
             if [ -f "$FD" ]; then
-                DUR=$((NOW_SEC - $(cat "$FD"))); D_STR="$((DUR/60))m $((DUR%60))s"
-                echo "$(date '+%b %d %H:%M:%S') - [SUCCESS] INTERNET UP (Down $D_STR)" >> "$UPTIME_LOG"
-                [ "$IS_SILENT" -eq 0 ] && send_notif "🟢 Internet Restored" "Connectivity restored.\n**Total Outage:** $D_STR" 3066993
+                START_TIME=$(cat "$FT")
+                START_SEC=$(cat "$FD")
+                DURATION_SEC=$((NOW_SEC - START_SEC))
+                DR="$((DURATION_SEC/60))m $((DURATION_SEC%60))s"
+                
+                MSG="🌐 **Internet Restored**\n**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
+                echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" >> "$LOGFILE"
+                
+                if [ "$IS_SILENT" -eq 0 ]; then
+                    curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"Connectivity Restored\", \"description\": \"$MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
+                else
+                    echo -e "$MSG" >> "$SILENT_BUFFER"
+                fi
                 rm -f "$FD" "$FT"
             fi
             echo 0 > "$FC"
         fi
     fi
 
-    # 5. Local Device Logic (Multi-threaded background)
-    if [ "$DEVICE_MONITOR" = "YES" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
+    # --- DEVICE CHECK ---
+    if [ "$DEVICE_MONITOR" = "ON" ] && [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
         LAST_DEV_CHECK=$NOW_SEC
         sed -e '/^#/d' -e '/^$/d' "$IP_LIST_FILE" | while read -r line; do
             TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
             NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
-            (
-                ping -q -c "$DEV_PING_COUNT" -W 1 "$TIP" > /dev/null 2>&1
-                RES=$?; S_ID=$(echo "$TIP" | tr '.' '_')
-                FC="/tmp/nw_c_$S_ID"; FD="/tmp/nw_d_$S_ID"
-                
-                if [ $RES -eq 0 ]; then
-                    if [ -f "$FD" ]; then
-                        DUR=$(( $(date +%s) - $(cat "$FD") )); D_STR="$((DUR/60))m $((DUR%60))s"
-                        echo "$(date '+%b %d %H:%M:%S') - [SUCCESS] Device: $NAME UP (Down $D_STR)" >> "$UPTIME_LOG"
-                        [ "$IS_SILENT" -eq 0 ] && send_notif "🟢 Device Online" "**$NAME** ($TIP) back online.\n**Outage:** $D_STR" 3066993
-                        rm -f "$FD"
+            [ -z "$NAME" ] && NAME="$TIP"
+            [ -z "$TIP" ] && continue
+            
+            SIP=$(echo "$TIP" | tr '.' '_')
+            FC="/tmp/nwda_c_$SIP"; FD="/tmp/nwda_d_$SIP"; FT="/tmp/nwda_t_$SIP"
+            
+            if ping -q -c "$DEV_PING_COUNT" -W 2 "$TIP" > /dev/null 2>&1; then
+                if [ -f "$FD" ]; then
+                    DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$((NOW_SEC-DSSEC))
+                    DR_STR="$((DUR/60))m $((DUR%60))s"
+                    D_MSG="✅ **$NAME Online**\n**Router:** $ROUTER_NAME\n**Down at:** $DSTART\n**Up at:** $NOW_HUMAN\n**Outage:** $DR_STR"
+                    echo "$NOW_HUMAN - [SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $DR_STR)" >> "$LOGFILE"
+                    
+                    if [ "$IS_SILENT" -eq 0 ]; then
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"description\": \"$D_MSG\", \"color\": 3066993}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    else
+                        echo -e "$D_MSG" >> "$SILENT_BUFFER"
                     fi
-                    echo 0 > "$FC"
-                else
-                    C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
-                    if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
-                        echo "$(date +%s)" > "$FD"
-                        echo "$(date '+%b %d %H:%M:%S') - [ALERT] Device: $NAME DOWN" >> "$UPTIME_LOG"
-                        [ "$IS_SILENT" -eq 0 ] && send_notif "🔴 Device Down" "**$NAME** ($TIP) offline." 15548997
+                    rm -f "$FD" "$FT"
+                fi
+                echo 0 > "$FC"
+            else
+                C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+                if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
+                    echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"
+                    echo "$NOW_HUMAN - [ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" >> "$LOGFILE"
+                    if [ "$IS_SILENT" -eq 0 ]; then
+                        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🔴 Device Down\", \"description\": \"**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $NOW_HUMAN\", \"color\": 15548997}]}" "$DISCORD_URL" > /dev/null 2>&1
+                    else
+                        echo -e "🔴 $NAME ($TIP) Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                     fi
                 fi
-            ) &
+            fi
         done
     fi
+
+    # Log Rotation Check
+    if [ $(wc -c < "$LOGFILE") -gt "$MAX_SIZE" ]; then
+        echo "$(date '+%b %d %H:%M:%S') - [SYSTEM] Log rotated." > "$LOGFILE"
+    fi
+
     sleep 1
 done
 EOF
-chmod +x "$INSTALL_DIR/nwda.sh"
 
-# --- 8. SERVICE SCRIPT (SMART PURGE + TEST COMMANDS) ---
-cat <<'EOF' > "$SERVICE_PATH"
+# --- 6. ENHANCED SERVICE SETUP (WITH SMART PURGE) ---
+chmod +x "$INSTALL_DIR/netwatchda.sh"
+cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
 START=99
 USE_PROCD=1
-INSTALL_DIR="/root/netwatchda"
 
-get_hw_key() {
-    CPU_ID=$(grep -m1 "serial" /proc/cpuinfo | awk '{print $3}')
-    [ -z "$CPU_ID" ] && CPU_ID=$(cat /sys/class/net/eth0/address 2>/dev/null || echo "NWDA_V1")
-    SEED=$(cat "$INSTALL_DIR/.seed")
-    echo "${CPU_ID}${SEED}" | sha256sum | awk '{print $1}'
-}
-
-extra_command "status" "Service status"
-extra_command "logs" "View logs"
-extra_command "purge" "Smart Uninstaller"
+extra_command "status" "Check if monitor is running"
+extra_command "logs" "View last 20 log entries"
+extra_command "clear" "Clear the log file"
+extra_command "discord" "Test discord notification"
+extra_command "purge" "Interactive smart uninstaller"
 
 start_service() {
-    HW_KEY=$(get_hw_key)
-    eval "$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 10000 -k "$HW_KEY" -in "$INSTALL_DIR/.vault.enc" 2>/dev/null)"
     procd_open_instance
-    procd_set_param command /bin/sh "$INSTALL_DIR/nwda.sh"
-    procd_set_param env D_URL="$D_URL" D_ID="$D_ID" T_TOK="$T_TOK" T_ID="$T_ID"
+    procd_set_param command /bin/sh "$INSTALL_DIR/netwatchda.sh"
     procd_set_param respawn
     procd_close_instance
 }
 
+status() {
+    pgrep -f "netwatchda.sh" > /dev/null && echo "netwatchda is RUNNING." || echo "netwatchda is STOPPED."
+}
+
+logs() {
+    [ -f "/tmp/netwatchda_log.txt" ] && tail -n 20 /tmp/netwatchda_log.txt || echo "No log found."
+}
+
+clear() {
+    echo "\$(date '+%b %d %H:%M:%S') - [SYSTEM] Log cleared." > "/tmp/netwatchda_log.txt"
+    echo "Log file cleared."
+}
+
+discord() {
+    if [ -f "$CONFIG_FILE" ]; then
+        eval "\$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
+        curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$DISCORD_URL"
+        echo "Warning test message (Yellow) sent."
+    fi
+}
+
 purge() {
-    echo -e "\n${RED}${BOLD}--- SMART UNINSTALLER ---${NC}"
-    echo -e "1. ${WHITE_BOLD}Full Uninstall${NC} (Delete all files, configs, and logs)"
-    echo -e "2. ${WHITE_BOLD}Smart Uninstall${NC} (Keep configs and vault, only remove script/service)"
-    printf "${BOLD}Choice [1-2]: ${NC}"; read -r p_choice </dev/tty
-    case "$p_choice" in
+    echo ""
+    echo -e "\033[1;31m=======================================================\033[0m"
+    echo -e "\033[1;31m🗑️  netwatchda Smart Uninstaller\033[0m"
+    echo -e "\033[1;31m=======================================================\033[0m"
+    echo ""
+    echo "1. Full Uninstall (Remove everything)"
+    echo "2. Keep Settings (Remove logic but keep config & README)"
+    echo "3. Cancel"
+    printf "Choice [1-3]: "
+    read choice </dev/tty
+    
+    case "\$choice" in
         1)
+            echo "🛑 Stopping service..."
             /etc/init.d/netwatchda stop
-            rm -rf "$INSTALL_DIR" "$SERVICE_PATH"
-            echo -e "${GREEN}✅ Everything purged.${NC}"
+            /etc/init.d/netwatchda disable
+            echo "🧹 Cleaning up /tmp and buffers..."
+            rm -f "/tmp/netwatchda_log.txt" "/tmp/nwda_*"
+            echo "🗑️  Removing installation directory..."
+            rm -rf "$INSTALL_DIR"
+            echo "🔥 Self-destructing service file..."
+            rm -f "$SERVICE_PATH"
+            echo -e "\033[1;32m✅ netwatchda has been completely removed.\033[0m"
             ;;
         2)
+            echo "🛑 Stopping service..."
             /etc/init.d/netwatchda stop
-            rm -f "$INSTALL_DIR/nwda.sh" "$SERVICE_PATH"
-            echo -e "${GREEN}✅ Logic removed. Settings preserved in $INSTALL_DIR${NC}"
+            /etc/init.d/netwatchda disable
+            echo "🧹 Cleaning up /tmp and buffers..."
+            rm -f "/tmp/netwatchda_log.txt" "/tmp/nwda_*"
+            echo "🗑️  Removing core script..."
+            rm -f "$INSTALL_DIR/netwatchda.sh"
+            echo "🔥 Removing service file..."
+            rm -f "$SERVICE_PATH"
+            echo -e "\033[1;33m✅ Logic removed. Settings preserved in $INSTALL_DIR\033[0m"
+            ;;
+        *)
+            echo "❌ Purge cancelled."
+            exit 0
             ;;
     esac
 }
 EOF
+
 chmod +x "$SERVICE_PATH"
-/etc/init.d/netwatchda enable
-/etc/init.d/netwatchda restart
+"$SERVICE_PATH" enable
+"$SERVICE_PATH" restart
+
+# --- 7. SUCCESS NOTIFICATION ---
+eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE")"
+NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
+curl -s -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchda Service Started\", \"description\": \"**Router:** $ROUTER_NAME\n**Time:** $NOW_FINAL\nMonitoring is active.\", \"color\": 1752220}]}" "$DISCORD_URL" > /dev/null
 
 # --- FINAL OUTPUT ---
-echo -e "\n${GREEN}=======================================================${NC}"
+echo ""
+echo -e "${GREEN}=======================================================${NC}"
 echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
 echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Quick Commands:${NC}"
-echo -e "  Logs: ${CYAN}/etc/init.d/netwatchda logs${NC}"
-echo -e "  Uninstall: ${RED}/etc/init.d/netwatchda purge${NC}"
+echo -e "  View Help       : ${CYAN}cat $README_FILE${NC}"
+echo -e "  Uninstall       : ${RED}/etc/init.d/netwatchda purge${NC}"
+echo -e "  Edit Settings   : ${CYAN}$CONFIG_FILE${NC}"
+echo -e "  Edit IP List    : ${CYAN}$IP_LIST_FILE${NC}"
+echo -e "  Restart         : ${YELLOW}/etc/init.d/netwatchda restart${NC}"
+echo ""
 echo ""
