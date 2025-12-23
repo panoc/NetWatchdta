@@ -270,7 +270,19 @@ You will be prompted to:
 - Or perform a full cleanup
 
 ---
- 
+
+File Path,Description
+/root/netwatchda/netwatchda.sh,The core logic engine (Daemon).
+/root/netwatchda/nwda_settings.conf,User configuration (Toggles & Intervals).
+/root/netwatchda/nwda_ips.conf,The list of devices to monitor.
+/root/netwatchda/.vault.enc,Encrypted file containing Discord/Telegram tokens.
+/etc/init.d/netwatchda,The OpenWrt service management script.
+/tmp/netwatchda/nwda_uptime.log,Human-readable event log (RAM-only).
+/tmp/netwatchda/nwda_ping.log,"Detailed ping history (Optional, RAM-only)."
+/tmp/netwatchda/nwda_silent_buffer,Temporary storage for Silent Mode summaries.
+
+---
+
 ## ⚖️ License
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**. 
