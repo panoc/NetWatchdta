@@ -274,7 +274,8 @@ You will be prompted to:
 **Complete File Structure**
 
 After installation, the following files will exist:
-File Path	Description
+| File Path | Description |
+| :--- | :--- |
 | /root/netwatchda/netwatchda.sh	| The core logic engine (Daemon). |
 | /root/netwatchda/nwda_settings.conf	| User configuration (Toggles & Intervals). |
 | /root/netwatchda/nwda_ips.conf	| The list of devices to monitor. |
