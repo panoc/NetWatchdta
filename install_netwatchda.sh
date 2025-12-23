@@ -451,7 +451,7 @@ SILENT_END=$user_silent_end # Hour to end silent mode (0-23). Default is 07.
 [Telegram Settings]
 TELEGRAM_ENABLE=$TELEGRAM_ENABLE_VAL # Global toggle for Telegram notifications (YES/NO). Default is NO.
 
-Monitoring Settings]
+[Monitoring Settings]
 CPU_GUARD_THRESHOLD=2.0 # Max CPU load average allowed before skipping pings. Default is 2.0.
 RAM_GUARD_MIN_FREE=4096 # Minimum free RAM in KB required to run alerts. Default is 4096.
 HEARTBEAT=$HB_VAL # Periodic I am alive notification (YES/NO). Default is NO.
