@@ -1,4 +1,4 @@
-# 📟 netwatchda - A lightweight, automated network monitoring tool
+# netwatchda - A lightweight, automated network monitoring tool
 
 **netwatchda** is a lightweight, POSIX-compliant shell daemon for **OpenWrt routers** that monitors both internet connectivity and local LAN devices designed specifically for OpenWrt routers.  
 It bridges the gap between your network hardware and your mobile device by sending real-time status updates via **Discord** Webhooks.
