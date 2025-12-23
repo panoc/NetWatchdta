@@ -206,7 +206,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     if [ "$notify_choice" -eq 4 ]; then
         echo -e "${YELLOW}ℹ️ Notifications disabled. Events will only be tracked in $UPTIME_LOG.${NC}"
     fi
-	echo -e "\n${BLUE}--- Silent Hours (No Alerts) ---${NC}"
+echo -e "\n${BLUE}--- Silent Hours (No Alerts) ---${NC}"
     printf "${BOLD}🌙 Enable Silent Hours? [y/n]: ${NC}"
     read enable_silent_choice </dev/tty
     
@@ -594,4 +594,4 @@ echo -e "\n${BOLD}Quick Commands:${NC}"
 echo -e "  View History    : ${CYAN}/etc/init.d/netwatchda logs${NC}"
 echo -e "  Uninstall       : ${RED}/etc/init.d/netwatchda purge${NC}"
 echo -e "  Settings        : ${CYAN}vi $CONFIG_FILE${NC}"
-echo ""
+echo ""	
