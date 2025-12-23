@@ -37,7 +37,7 @@ echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
-ask_yn "❓ Begin installation V9?"
+ask_yn "❓ Begin installation *************V10?"
 [ "$ANSWER_YN" = "n" ] && exit 0
 
 # Paths
@@ -367,6 +367,7 @@ EOF
 fi
 # Vault Gen
 echo -e "\n${CYAN}🔐 Securing credentials...${NC}"
+
 get_hw_key() {
     local seed="nwda_v1_secure_seed_2025"
     local cpu=$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print $3}')
@@ -375,20 +376,20 @@ get_hw_key() {
 }
 
 if [ "$KEEP_CONFIG" -eq 0 ]; then
-    DATA="${D_HOOK}|${D_UID}|${T_TOK}|${T_CHAT}"
+    VAULT_DATA="${D_HOOK}|${D_UID}|${T_TOK}|${T_CHAT}"
     if [ "$ENCRYPTION_METHOD" = "OPENSSL" ]; then
-        if echo -n "$DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$(get_hw_key)" -out "$VAULT_FILE" 2>/dev/null; then
-            echo -e "${GREEN}✅ Encrypted (OpenSSL).${NC}"
+        if echo -n "$VAULT_DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$(get_hw_key)" -out "$VAULT_FILE" 2>/dev/null; then
+            echo -e "${GREEN}✅ Credentials Encrypted (OpenSSL).${NC}"
         else echo -e "${RED}❌ Encryption Failed.${NC}"; fi
     else
-        if echo -n "$DATA" | base64 > "$VAULT_FILE"; then echo -e "${YELLOW}✅ Encoded (Base64).${NC}"; else echo -e "${RED}❌ Failed.${NC}"; fi
+        if echo -n "$VAULT_DATA" | base64 > "$VAULT_FILE"; then echo -e "${YELLOW}✅ Credentials Encoded (Base64).${NC}"; else echo -e "${RED}❌ Failed.${NC}"; fi
     fi
 fi
 
 echo -e "\n${CYAN}🛠️  Generating optimized core...${NC}"
 cat <<'EOF' > "$INSTALL_DIR/netwatchda.sh"
 #!/bin/sh
-# netwatchda - Optimized Engine
+# netwatchda - Optimized Engine (High Fidelity)
 
 # Paths & Init
 BASE="/root/netwatchda"
@@ -409,10 +410,10 @@ log_msg() {
     local m="$1" t="$2" ts=$(date '+%b %d %H:%M:%S')
     if [ "$t" = "P" ] && [ "$PING_LOG_ENABLE" = "YES" ]; then
         echo "$ts - $m" >> "$PINGLOG"
-        [ -f "$PINGLOG" ] && [ $(wc -c < "$PINGLOG") -gt $UPTIME_LOG_MAX_SIZE ] && echo "$ts - Rotated" > "$PINGLOG"
+        [ -f "$PINGLOG" ] && [ $(wc -c < "$PINGLOG") -gt $UPTIME_LOG_MAX_SIZE ] && echo "$ts - [SYSTEM] Log rotated." > "$PINGLOG"
     elif [ "$t" = "U" ]; then
         echo "$ts - $m" >> "$LOG"
-        [ -f "$LOG" ] && [ $(wc -c < "$LOG") -gt $UPTIME_LOG_MAX_SIZE ] && echo "$ts - Rotated" > "$LOG"
+        [ -f "$LOG" ] && [ $(wc -c < "$LOG") -gt $UPTIME_LOG_MAX_SIZE ] && echo "$ts - [SYSTEM] Log rotated." > "$LOG"
     fi
 }
 
@@ -422,7 +423,7 @@ check_config() {
     if [ "$curr_mtime" != "$CONF_MTIME" ]; then
         eval "$(sed '/^\[.*\]/d' "$CONF" | sed 's/ #.*//')"
         CONF_MTIME="$curr_mtime"
-        # Calculate HW Key once per config load
+        # Calculate HW Key once per config load to save CPU
         local s="nwda_v1_secure_seed_2025"
         local c=$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print $3}')
         local m=$(cat /sys/class/net/eth0/address 2>/dev/null || cat /sys/class/net/br-lan/address 2>/dev/null)
@@ -440,8 +441,7 @@ get_creds() {
     
     [ -z "$d" ] && return 1
     
-    # Pure Shell Parsing (Zero Forks)
-    # Format: HOOK|UID|TOK|CHAT
+    # Pure Shell Parsing (Zero Forks) - Matches original structure
     local rem="$d"
     DISCORD_WEBHOOK="${rem%%|*}"; rem="${rem#*|}"
     DISCORD_USERID="${rem%%|*}"; rem="${rem#*|}"
@@ -451,29 +451,30 @@ get_creds() {
 
 # --- SEND NOTIFICATION ---
 notify() {
-    local ti="$1" de="$2" co="$3" fl="$4"
+    local title="$1" desc="$2" color="$3" filter="$4"
     
     # RAM Guard (Integer Math)
     local fr=$(df /tmp | awk 'NR==2 {print $4}')
-    [ "$fr" -lt "$RAM_GUARD_MIN_FREE" ] && { log_msg "RAM LOW ($fr). Skipped." "U"; return; }
+    [ "$fr" -lt "$RAM_GUARD_MIN_FREE" ] && { log_msg "[SYSTEM] RAM LOW ($fr). Notification skipped." "U"; return; }
 
     get_creds
     
     # Discord
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
-        if [ -z "$fl" ] || [ "$fl" = "BOTH" ] || [ "$fl" = "DISCORD" ]; then
+        if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
             curl -s -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\": [{\"title\": \"$ti\", \"description\": \"$de\", \"color\": $co}]}" \
+            -d "{\"embeds\": [{\"title\": \"$title\", \"description\": \"$desc\", \"color\": $color}]}" \
             "$DISCORD_WEBHOOK" >/dev/null 2>&1
         fi
     fi
     
     # Telegram
     if [ "$TELEGRAM_ENABLE" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-        if [ -z "$fl" ] || [ "$fl" = "BOTH" ] || [ "$fl" = "TELEGRAM" ]; then
+        if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "TELEGRAM" ]; then
+            # Matches original formatting exactly
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d chat_id="$TELEGRAM_CHAT_ID" -d text="$ti
-$de" >/dev/null 2>&1
+            -d chat_id="$TELEGRAM_CHAT_ID" -d text="$title
+$desc" >/dev/null 2>&1
         fi
     fi
     unset DISCORD_WEBHOOK DISCORD_USERID TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
@@ -490,16 +491,18 @@ while true; do
     cpu_int=$(echo "$cpu_1min" | tr -d '.') # Convert 1.23 -> 123
     # If load 2.00 (200), skip
     if [ "$cpu_int" -gt "$CPU_GUARD_THRESHOLD" ] 2>/dev/null; then
-        log_msg "High Load ($cpu_1min). Skipping." "U"; sleep 10; continue
+        log_msg "[SYSTEM] High Load ($cpu_1min). Skipping cycle." "U"; sleep 10; continue
     fi
 
     # HEARTBEAT
     if [ "$HEARTBEAT" = "YES" ] && [ $((NOW - LAST_HB)) -ge "$HB_INTERVAL" ]; then
         LAST_HB=$NOW
-        MSG="**Router:** $ROUTER_NAME\n**Status:** Operational\n**Time:** $DATE"
-        [ "$HB_MENTION" = "YES" ] && MSG="$MSG\n<@$DISCORD_USERID>"
-        notify "💓 Heartbeat" "$MSG" "1752220" "${HB_TARGET:-BOTH}"
-        log_msg "Heartbeat Sent." "U"
+        # RESTORED: Exact original string
+        HB_MSG="**Router:** $ROUTER_NAME\n**Status:** Systems Operational\n**Time:** $DATE"
+        [ "$HB_MENTION" = "YES" ] && HB_MSG="$HB_MSG\n<@$DISCORD_USERID>"
+        
+        notify "💓 Heartbeat Report" "$HB_MSG" "1752220" "${HB_TARGET:-BOTH}"
+        log_msg "[$ROUTER_NAME] Heartbeat sent (${HB_TARGET:-BOTH})." "U"
     fi
 
     # SILENT MODE
@@ -515,14 +518,14 @@ while true; do
     # DUMP SILENT BUFFER
     if [ "$SILENT" -eq 0 ] && [ -s "$SBUF" ]; then
         clean_sum=$(sed ':a;N;$!ba;s/\n/\\n/g' "$SBUF")
-        notify "🌙 Summary" "**Router:** $ROUTER_NAME\n$clean_sum" "10181046" "BOTH"
+        notify "🌙 Silent Hours Summary" "**Router:** $ROUTER_NAME\n$clean_sum" "10181046" "BOTH"
         > "$SBUF"
     fi
 
     # INTERNET CHECK
     if [ "$EXT_ENABLE" = "YES" ] && [ $((NOW - LAST_EXT)) -ge "$EXT_SCAN_INTERVAL" ]; then
         LAST_EXT=$NOW
-        FD="$TMP/ext_d"; FT="$TMP/ext_t"; FC="$TMP/ext_c"
+        FD="$TMP/nwda_ext_d"; FT="$TMP/nwda_ext_t"; FC="$TMP/nwda_ext_c"
         UP=0
         ping -q -c $EXT_PING_COUNT -W $EXT_PING_TIMEOUT "$EXT_IP" >/dev/null 2>&1 && UP=1
         [ $UP -eq 0 ] && ping -q -c $EXT_PING_COUNT -W $EXT_PING_TIMEOUT "$EXT_IP2" >/dev/null 2>&1 && UP=1
@@ -531,18 +534,25 @@ while true; do
             C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
             if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                 echo "$NOW" > "$FD"; echo "$DATE" > "$FT"
-                log_msg "INTERNET DOWN" "U"
-                if [ $SILENT -eq 0 ]; then notify "🔴 Internet Down" "**Router:** $ROUTER_NAME\n**Time:** $DATE" "15548997" "BOTH";
+                log_msg "[ALERT] [$ROUTER_NAME] INTERNET DOWN" "U"
+                
+                # RESTORED: Exact original string
+                MSG="**Router:** $ROUTER_NAME\n**Time:** $DATE"
+                
+                if [ $SILENT -eq 0 ]; then notify "🔴 Internet Down" "$MSG" "15548997" "BOTH";
                 else echo "Internet Down: $DATE" >> "$SBUF"; fi
             fi
         else
             if [ -f "$FD" ]; then
                 ST=$(cat "$FT"); SS=$(cat "$FD"); DUR=$((NOW - SS))
                 STR="$((DUR/60))m $((DUR%60))s"
-                log_msg "INTERNET UP (Down $STR)" "U"
-                MSG="**Router:** $ROUTER_NAME\n**Down:** $ST\n**Up:** $DATE\n**Duration:** $STR"
-                if [ $SILENT -eq 0 ]; then notify "🟢 Internet Restored" "$MSG" "3066993" "BOTH";
-                else echo "Internet Up: $DATE (Down $STR)" >> "$SBUF"; fi
+                log_msg "[SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $STR)" "U"
+                
+                # RESTORED: Exact original string
+                MSG="**Router:** $ROUTER_NAME\n**Down at:** $ST\n**Up at:** $DATE\n**Total Outage:** $STR"
+                
+                if [ $SILENT -eq 0 ]; then notify "🟢 Connectivity Restored" "$MSG" "3066993" "BOTH";
+                else echo "Internet Restored: $DATE (Down $STR)" >> "$SBUF"; fi
                 rm -f "$FD" "$FT"
             fi
             echo 0 > "$FC"
@@ -556,27 +566,39 @@ while true; do
             (
                 TIP="${line%%@*}"; TIP=$(echo "$TIP" | tr -d ' ')
                 NAME="${line#*@}"; NAME=$(echo "$NAME" | sed 's/^[ \t]*//')
+                [ -z "$NAME" ] && NAME="$TIP"
                 [ -z "$TIP" ] && exit
                 SIP=$(echo "$TIP" | tr '.' '_')
-                FC="$TMP/d_${SIP}c"; FD="$TMP/d_${SIP}d"; FT="$TMP/d_${SIP}t"
+                FC="$TMP/dev_${SIP}_c"; FD="$TMP/dev_${SIP}_d"; FT="$TMP/dev_${SIP}_t"
                 
                 if ping -q -c $DEV_PING_COUNT -W 1 "$TIP" >/dev/null 2>&1; then
+                    log_msg "DEVICE - $NAME - $TIP: UP" "P"
                     if [ -f "$FD" ]; then
                         ST=$(cat "$FT"); SS=$(cat "$FD"); DUR=$(( $(date +%s) - SS ))
                         STR="$((DUR/60))m $((DUR%60))s"
-                        log_msg "$NAME UP ($STR)" "U"
-                        if [ $SILENT -eq 0 ]; then notify "🟢 Device Online" "**Device:** $NAME ($TIP)\n**Down:** $ST\n**Duration:** $STR" "3066993" "BOTH";
-                        else echo "$NAME Up: $(date '+%H:%M') ($STR)" >> "$SBUF"; fi
+                        log_msg "[SUCCESS] [$ROUTER_NAME] Device: $NAME ($TIP) Online (Down $STR)" "U"
+                        
+                        # RESTORED: Exact original string
+                        D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Down at:** $ST\n**Up at:** $(date '+%b %d %H:%M:%S')\n**Outage:** $STR"
+                        
+                        if [ $SILENT -eq 0 ]; then notify "🟢 Device Online" "$D_MSG" "3066993" "BOTH";
+                        else echo "Device $NAME UP: $(date '+%b %d %H:%M:%S') (Down $STR)" >> "$SBUF"; fi
                         rm -f "$FD" "$FT"
                     fi
                     echo 0 > "$FC"
                 else
+                    log_msg "DEVICE - $NAME - $TIP: DOWN" "P"
                     C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
                     if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
-                        echo "$(date +%s)" > "$FD"; echo "$(date '+%b %d %H:%M:%S')" > "$FT"
-                        log_msg "$NAME DOWN" "U"
-                        if [ $SILENT -eq 0 ]; then notify "🔴 Device Down" "**Device:** $NAME ($TIP)\n**Time:** $(date '+%H:%M:%S')" "15548997" "BOTH";
-                        else echo "$NAME Down: $(date '+%H:%M')" >> "$SBUF"; fi
+                        TS=$(date '+%b %d %H:%M:%S')
+                        echo "$(date +%s)" > "$FD"; echo "$TS" > "$FT"
+                        log_msg "[ALERT] [$ROUTER_NAME] Device: $NAME ($TIP) Down" "U"
+                        
+                        # RESTORED: Exact original string
+                        D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $TS"
+                        
+                        if [ $SILENT -eq 0 ]; then notify "🔴 Device Down" "$D_MSG" "15548997" "BOTH";
+                        else echo "Device $NAME DOWN: $TS" >> "$SBUF"; fi
                     fi
                 fi
             ) &
@@ -705,7 +727,8 @@ echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Quick Commands:${NC}"
 echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchda purge${NC}"
-echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
-echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchda restart${NC}"
 echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchda credentials${NC}"
+echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
+echo -e "  Edit IP List     : ${CYAN}$IP_LIST_FILE${NC}"
+echo -e "  Restart         :  ${YELLOW}/etc/init.d/netwatchda restart${NC}"
 echo ""
