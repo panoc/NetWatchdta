@@ -58,32 +58,34 @@ for pkg in $DEPS; do
     fi
 done
 
+# --- UPDATED DEPENDENCY INSTALLER ---
 if [ -n "$MISSING_PKGS" ]; then
     echo -e "${YELLOW}⚠️  Missing:${BOLD}$MISSING_PKGS${NC}"
     printf "${BOLD}📥 Download them now? [y/n]: ${NC}"
     read dep_confirm </dev/tty
     
     if [ "$dep_confirm" = "y" ]; then
-        echo -e "${CYAN}🔄 Updating package lists (Insecure Bootstrap)...${NC}"
+        echo -e "${CYAN}🔄 Forcing insecure update (Bootstrap)...${NC}"
         
-        # 1. Update lists. 
-        # 2. Use --force-maintainer to prevent prompts.
-        # 3. We use a trick for curl/wget to ignore certs during this first pull.
-        opkg update >/dev/null 2>&1
+        # 1. Update the lists without checking certificates
+        opkg update --no-check-certificate >/dev/null 2>&1
         
-        echo -e "${CYAN}🔄 Installing dependencies...${NC}"
-        # Some OpenWrt versions of opkg don't support --no-check-certificate directly,
-        # but they use the underlying wget configuration. 
-        # We temporarily tell the system to allow insecure downloads for this step.
-        echo "check_certificate = off" > /tmp/wgetrc
-        WGETRC=/tmp/wgetrc opkg install $MISSING_PKGS > /tmp/opkg_install.log 2>&1
+        echo -e "${CYAN}🔄 Installing dependencies (Silent)...${NC}"
         
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✅ Dependencies installed.${NC}"
-            rm -f /tmp/wgetrc
+        # 2. Force opkg to use wget-ssl with no check certificate option
+        # This overrides the global SSL verification just for this command
+        opkg install $MISSING_PKGS \
+          --force-maintainer \
+          --no-check-certificate \
+          --force-space > /tmp/opkg_install.log 2>&1
+
+        # Check if ca-bundle specifically was installed to fix future SSL
+        if opkg list-installed | grep -q "ca-bundle"; then
+            echo -e "${GREEN}✅ ca-bundle installed. SSL security is now active.${NC}"
+            rm -f /tmp/opkg_install.log
         else
-            echo -e "${RED}❌ Installation failed. Error log:${NC}"
-            cat /tmp/opkg_install.log
+            echo -e "${RED}❌ Installation failed. The system still cannot verify SSL.${NC}"
+            echo -e "${YELLOW}Check your internet or system date (Current: $(date))${NC}"
             exit 1
         fi
     else
