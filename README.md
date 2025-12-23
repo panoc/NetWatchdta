@@ -71,7 +71,7 @@ Run the following command in your OpenWrt router’s terminal.
 **The installer is interactive and will guide you through setup.**
 
 ```sh
-wget --no-check-certificate -qO /tmp/install_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatch-Discord-Alerts-for-OpenWRT/refs/heads/main/install_netwatchda.sh" && sh /tmp/install_netwatchda.sh
+wget --no-check-certificate -qO /tmp/install_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatchda/refs/heads/main/install_netwatchda.sh" && sh /tmp/install_netwatchda.sh
 
 ```
 
@@ -257,7 +257,7 @@ If you enable Silent Hours (e.g., 23:00 to 07:00):
 To remove netwatchda, run the official uninstaller:
 
 ```sh
-wget --no-check-certificate -qO /tmp/uninstall_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatch-Discord-Alerts-for-OpenWRT/refs/heads/main/uninstall_netwatchda.sh" && sh /tmp/uninstall_netwatchda.sh
+wget --no-check-certificate -qO /tmp/uninstall_netwatchda.sh "https://raw.githubusercontent.com/panoc/NetWatcda/refs/heads/main/uninstall_netwatchda.sh" && sh /tmp/uninstall_netwatchda.sh
 ```
 OR
 
