@@ -83,7 +83,7 @@ echo -e "${BLUE}=======================================================${NC}"
 echo ""
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
-ask_yn "❓ This will begin the installation process V12. Continue?"
+ask_yn "❓ This will begin the installation process. Continue?"
 if [ "$ANSWER_YN" = "n" ]; then
     echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
@@ -692,6 +692,7 @@ send_notification() {
     fi
 
     # IF Internet is DOWN and not forced -> BUFFER IT
+    # Note: Device alerts during outage must be buffered.
     if [ "$net_stat" = "DOWN" ] && [ "$force" != "YES" ]; then
         # Check Buffer Size (5KB Limit = 5120 bytes)
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
@@ -748,7 +749,10 @@ flush_buffer() {
              local b_tel_raw=$(echo "$line" | awk -F'|||' '{print $5}')
              
              # Restore newlines from __BR__ placeholder
-             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\n/g')
+             # For Discord (JSON), we need literal '\n' string (double escaped)
+             local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\\n/g')
+             
+             # For Telegram (Text), we need actual newlines
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              
              sleep 1 # Maintain delay for buffered messages too
@@ -839,8 +843,8 @@ $SUMMARY_CONTENT"
                     
                     log_msg "[ALERT] [$ROUTER_NAME] INTERNET DOWN" "UPTIME"
                     
-                    # NOTE: Notification for "Internet Down" is SUPPRESSED as requested.
-                    # It will only be logged. The Summary (Restored) message covers the outage.
+                    # NOTE: Internet Down notification is SUPPRESSED. 
+                    # Timeline is handled by Restored message.
                     
                     if [ "$IS_SILENT" -ne 0 ]; then
                         # Check Buffer Limit (5KB)
@@ -870,9 +874,11 @@ $SUMMARY_CONTENT"
                     log_msg "[SUCCESS] [$ROUTER_NAME] INTERNET UP (Down $DR)" "UPTIME"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # FLUSH BUFFER BEFORE SENDING RESTORE MSG
-                        flush_buffer
+                        # 1. SEND INTERNET RESTORED NOTIFICATION
                         send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "NO" "$MSG_T"
+                        
+                        # 2. FLUSH BUFFER (Send queued device alerts)
+                        flush_buffer
                     else
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then
                              : # Drop
@@ -977,7 +983,7 @@ $SUMMARY_CONTENT"
                      d_n=$(echo "$line" | cut -d'|' -f2); d_i=$(echo "$line" | cut -d'|' -f3); d_t=$(echo "$line" | cut -d'|' -f4)
                      # Append to temp files to survive subshell loop
                      echo "• $d_n ($d_i) @ $d_t" >> "$TMP_DIR/d_list"
-                     echo "• $d_n - $d_i - $d_t" >> "$TMP_DIR/t_list"
+                     echo "🔴 $d_n - $d_i - $d_t" >> "$TMP_DIR/t_list"
                  done
                  
                  D_LIST=$(cat "$TMP_DIR/d_list"); rm -f "$TMP_DIR/d_list"
@@ -1023,7 +1029,7 @@ $T_LIST"
                      d_n=$(echo "$line" | cut -d'|' -f2); d_i=$(echo "$line" | cut -d'|' -f3); d_t=$(echo "$line" | cut -d'|' -f4)
                      d_dur=$(echo "$line" | cut -d'|' -f5)
                      echo "• $d_n ($d_i) @ $d_t (Outage: $d_dur)" >> "$TMP_DIR/d_list_up"
-                     echo "• $d_n - $d_i - $d_t - $d_dur" >> "$TMP_DIR/t_list_up"
+                     echo "🟢 $d_n - $d_i - $d_t - $d_dur" >> "$TMP_DIR/t_list_up"
                  done
                  
                  D_LIST=$(cat "$TMP_DIR/d_list_up"); rm -f "$TMP_DIR/d_list_up"
