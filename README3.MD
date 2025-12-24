@@ -67,15 +67,17 @@ Phase 1: Create the Discord Webhook
 3. Follow the instructions to give your bot a name (e.g., MyHomeMonitor) and a username (must end in "bot", e.g., nwda_router_bot).
 4. BotFather will send you a message containing your HTTP API Token. It looks like this: 123456789:ABCdefGhIJKlmNoPQRstUV
 5. Save this! This is your TELE_BOT_TOKEN.
+6. *Keep this toker safe!*
 
 ### **Phase 2. Get Your Chat ID**
 The bot needs to know who to send the messages to.
 
 1. Search for your new bot by its username and press Start.
 2. Send a random message to the bot (like "Hello").
-3.- Now, in your web browser, go to the following URL (replace <YOUR_TOKEN> with the token you got from BotFather): https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
-4.- Look for the part of the text that says "chat":{"id":XXXXXXXXX.
-5.- The number (usually 9 or 10 digits) is your TELE_CHAT_ID.
+3. Now, in your web browser, go to the following URL (replace <YOUR_TOKEN> with the token you got from BotFather): https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+4. Look for the part of the text that says "chat":{"id":XXXXXXXXX.
+5. The number (usually 9 or 10 digits) is your TELE_CHAT_ID.
+6. *Keep this numner safe!*
 
 **Note:** 
 If you are using a Group, the Chat ID will usually start with a minus sign (e.g., -100123456789).
@@ -224,6 +226,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
