@@ -41,7 +41,7 @@ It features **smart resource management** that automatically adjusts its executi
 
 ## 🔔 Discord and Telegram Configuration Guide
 
-###Discrod Configuration### 
+### Discrod Configuration
 
 To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
 ```
@@ -58,7 +58,7 @@ Phase 1: Create the Discord Webhook
 4.  *Keep this numner safe!*
 
 ```
-###Telegram Configuration
+### Telegram Configuration
 
 ### **Phase 1. Create the Bot (Get the Token)**
 ```
@@ -223,6 +223,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
