@@ -120,11 +120,26 @@ Controls the behavior of the daemon.
 
 | Setting | Description |
 | --- | --- |
-| `EXEC_METHOD` | **Auto-managed.** `1` for Parallel (High RAM), `2` for Sequential (Low RAM). |
-| `EXT_SCAN_INTERVAL` | How often (in seconds) to check internet connectivity. |
-| `SILENT_ENABLE` | `YES`/`NO`. Mutes alerts between `SILENT_START` and `SILENT_END`. |
+| `ROUTER_NAME` | Name displayed in all notifications (e.g., "Home Router"). |
+| `EXEC_METHOD` | `1` for **Parallel** (Fast/High RAM), `2` for **Sequential** (Safe/Low RAM). |
+| `CPU_GUARD_THRESHOLD` | Pauses monitoring if system load exceeds this value (Default: `2.0`). |
+| `RAM_GUARD_MIN_FREE` | Min free RAM (KB) required to process alerts (Default: `4096`). |
+| `DISCORD_ENABLE` | `YES`/`NO`. Toggle Discord notifications. |
+| `TELEGRAM_ENABLE` | `YES`/`NO`. Toggle Telegram notifications. |
+| `SILENT_ENABLE` | `YES`/`NO`. Enables Silent Mode (buffers alerts). |
+| `SILENT_START` | Hour to **start** silence (0-23) (e.g., `23` for 11 PM). |
+| `SILENT_END` | Hour to **end** silence (0-23) (e.g., `07` for 7 AM). |
 | `HEARTBEAT` | `YES`/`NO`. Sends a periodic "I am alive" message. |
-| `CPU_GUARD_THRESHOLD` | Pauses script if router load exceeds this value (Default: 2.0). |
+| `HB_INTERVAL` | Seconds between heartbeats (Default: `86400` = 24h). |
+| `HB_START_HOUR` | The hour (0-23) the heartbeat should arrive (Default: `12`). |
+| `HB_TARGET` | Where to send: `DISCORD`, `TELEGRAM`, or `BOTH`. |
+| `EXT_ENABLE` | `YES`/`NO`. Monitor ISP/Internet connectivity. |
+| `EXT_IP` | Primary external IP to ping (Default: `1.1.1.1`). |
+| `EXT_SCAN_INTERVAL` | How often (in seconds) to check internet status. |
+| `EXT_FAIL_THRESHOLD` | Failed checks before marking internet as DOWN. |
+| `DEVICE_MONITOR` | `YES`/`NO`. Monitor local LAN devices. |
+| `DEV_SCAN_INTERVAL` | How often (in seconds) to check local devices. |
+| `DEV_FAIL_THRESHOLD` | Failed checks before marking a device as DOWN. |
 
 ### 2. `nwda_ips.conf`
 
@@ -224,6 +239,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
