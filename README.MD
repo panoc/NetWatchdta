@@ -3,7 +3,7 @@
 
 ### Advanced Network Monitoring & Alerting for OpenWrt
 
-**netwatchdta** is a lightweight, POSIX-compliant shell daemon designed specifically for OpenWrt routers. It bridges the gap between your network hardware and your mobile device by sending real-time status **notifications** via **Discord** and/or **Telegram**.
+**netwatchdta** is a lightweight, POSIX-compliant shell daemon designed specifically for OpenWRT routers. It bridges the gap between your network hardware and your mobile device by sending real-time status **notifications** via **Discord** and/or **Telegram**.
 
 Designed for easy installation, reliability, minimal resource usage, and zero bloat. It features **smart resource management** that automatically adjusts its execution strategy based on your router's available RAM and CPU load, making it reliable on everything from tiny travel routers to enterprise gateways.
 
