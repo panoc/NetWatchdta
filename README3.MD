@@ -1,10 +1,3 @@
-Here is the comprehensive, unified **README.md** file for your GitHub repository.
-
-I have combined your detailed guides (Discord/LuCI) with the technical accuracy of the latest script version (OpenSSL enforcement, Smart RAM detection, and the new file structure).
-
-You can copy the code block below directly into your repository.
-
-
 # netwatchda 🚀
 
 ### Advanced Network Monitoring & Alerting for OpenWrt
@@ -240,6 +233,7 @@ You will be prompted to either remove everything (including dependencies like `o
 
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
+
 
 
 
