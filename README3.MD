@@ -60,8 +60,9 @@ Phase 1: Create the Discord Webhook
 ```
 ### Telegram Configuration
 
-### Phase 1. Create the Bot (Get the Token)
 ```
+### Phase 1. Create the Bot (Get the Token)
+
 1. Open Telegram and search for @BotFather.
 2. Start a chat and send the command: /newbot
 3. Follow the instructions to give your bot a name (e.g., MyHomeMonitor) and a username (must end in "bot", e.g., nwda_router_bot).
@@ -223,6 +224,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
