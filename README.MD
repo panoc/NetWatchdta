@@ -118,7 +118,7 @@ Depending on your OS, the files are installed in standard locations:
 
 Configuration files are located in the Base Folder (see above).
 
-## 1. `nwdta_settings.conf`
+** 1. `nwdta_settings.conf` **
 
 <details>
 <summary><strong>Controls the behavior of the daemon.</strong></summary>
@@ -152,7 +152,7 @@ Configuration files are located in the Base Folder (see above).
 | `DEV_FAIL_THRESHOLD` | Failed checks before marking a device as DOWN. |
 | `DEV_PING_COUNT` | Number of packets per device check. |
 
-> ## Understanding "Silent Hours"
+>  Understanding "Silent Hours"
 > 
 > 
 > If you enable Silent Hours (e.g., 23:00 to 07:00):
@@ -164,7 +164,7 @@ Configuration files are located in the Base Folder (see above).
 
 </details>
 
-## 2. `nwdta_ips.conf`
+** 2. `nwdta_ips.conf` **
 
 <details>
 <summary><strong>List the local devices you want to monitor.</strong></summary>
