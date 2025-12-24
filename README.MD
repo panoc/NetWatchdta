@@ -82,7 +82,7 @@ The script depends on `openssl-util` and `curl` to function securely. The instal
 
 ### The interactive installer will:
 
-1. Check system requirements (Flash/RAM).
+1. Check system requirements (Storage/RAM).
 2. Ask for your **Notification Credentials** (Discord/Telegram).
 3. Perform a live connectivity test.
 4. Select some basic settings.
