@@ -100,7 +100,7 @@ Depending on your OS, the files are installed in standard locations:
 | **Config** | `nwdta_settings.conf` | `nwdta_settings.conf` | User settings (Intervals, Toggles). |
 | **IP List** | `nwdta_ips.conf` | `nwdta_ips.conf` | List of devices to monitor. |
 | **Vault** | `.vault.enc` | `.vault.enc` | Encrypted tokens. |
-| **Logs** | `/tmp/netwatchdta/` | `/tmp/netwatchdta/` | RAM-based activity logs. |
+| **Logs** | `/tmp/netwatchdta/` | `/tmp/netwatchdta/` | Activity logs. |
 </details>
 
 ---
