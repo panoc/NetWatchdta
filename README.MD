@@ -230,7 +230,7 @@ The following table illustrates how `netwatchdta` manages memory during a "mass 
 | **Flushing 50 Buffered Alerts** | **~3.5 MB** (Queue: 1 at a time) | **~3.5 MB** (Queue: 1 at a time) |
 
 > **Note:** Parallel Mode trades spare RAM for speed. The installer automatically restricts Parallel Mode to routers with sufficient memory to absorb these spikes safely.
-> If you don't have many devices to monitor you can safely use Parallel Mode on less powerful router by adjusting **EXEC_METHOD** in **nwdta_settings.conf**.
+> If you don't have many devices to monitor you can safely use Parallel Mode on less powerful routers by adjusting **EXEC_METHOD** in **nwdta_settings.conf**.
 
 ## 🗑️ Uninstallation
 
