@@ -149,7 +149,6 @@ Configuration files are located in `/root/netwatchda/`.
 > [!TIP]
 > ### Understanding "Silent Hours"
 > 
-> 
 > If you enable Silent Hours (e.g., 23:00 to 07:00):
 > 1. Individual alerts are **paused**.
 > 2. Events are saved to a temporary RAM buffer (`nwda_silent_buffer`).
