@@ -1,5 +1,6 @@
 # netwatchda 👁️
-
+![Platform](https://img.shields.io/badge/OpenWrt-Compatible-1272ba?style=flat-square&logo=openwrt)
+![Status](https://img.shields.io/badge/Status-Monitoring-brightgreen?style=flat-square&logo=eye)
 ### Advanced Network Monitoring & Alerting for OpenWrt
 
 **netwatchda** is a lightweight, POSIX-compliant shell daemon designed specifically for OpenWrt routers. It bridges the gap between your network hardware and your mobile device by sending real-time status updates via **Discord** or **Telegram**.
@@ -233,6 +234,7 @@ You will be prompted to either remove everything (including dependencies like `o
 
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
+
 
 
 
