@@ -39,8 +39,10 @@ It features **smart resource management** that automatically adjusts its executi
 
 ---
 
-## 🔔 Discord Configuration Guide
+## 🔔 Discord and Telegram Configuration Guide
 
+### Discrod ### 
+```
 To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
 
 ### **Phase 1: Create the Discord Webhook**
@@ -54,6 +56,7 @@ To receive alerts, you need a Webhook URL. If you want mentions (pings), you als
 2.  Right-click your own username in any chat and select **Copy User ID**.
 3.  It will be a long number (e.g., `184000000000000000`).
 
+```
 > [!TIP]
 > The installer will ask for these during setup. If you change them later, use the secure command: `/etc/init.d/netwatchda credentials`
 
@@ -194,3 +197,4 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
