@@ -161,7 +161,7 @@ List the local devices you want to monitor.
 
 ---
 
-## <img src="https://icongr.am/octicons/terminal.svg?size=30&color=blue" width="30"> 1 Management via Terminal
+## 🛠️ 1 Management via Terminal
 
 `netwatchda` installs a comprehensive system service.
 
@@ -251,6 +251,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 ```
 
 ```
+
 
 
 
