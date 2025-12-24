@@ -31,45 +31,27 @@ Designed for easy installation, reliability, minimal resource usage, and zero bl
 
 ---
 
-## 🔔 Discord and Telegram Configuration Guide
+## 🔔 Discord and Telegram Setup
 
-### Discord Configuration
+You will need a **Discord Webhook** or **Telegram Bot Token**.
 
-To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
+<details>
+<summary><strong>Click to view Discord Setup Instructions</strong></summary>
 
-#### Phase 1: Create the Discord Webhook
-1. Open Discord and right-click your server's text channel (e.g., `#logs`).
-2. Select **Edit Channel** -> **Integrations** -> **Webhooks**.
-3. Click **New Webhook**, name it (e.g., "Router Watchdog"), and copy the **Webhook URL**.
-4. *Keep this URL safe!*
+1. **Create Webhook:** Right-click a Discord channel -> Edit Channel -> Integrations -> Webhooks. Create one and copy the URL.
+2. **Get User ID (Optional):** Enable Developer Mode in Discord settings. Right-click your username in chat -> Copy User ID.
 
-#### Phase 2: Get your User ID (Optional)
-1. Go to **User Settings** -> **Advanced** and enable **Developer Mode**.
-2. Right-click your own username in any chat and select **Copy User ID**.
-3. It will be a long number (e.g., `184000000000000000`).
-4. *Keep this number safe!*
+</details>
 
-### Telegram Configuration
+<details>
+<summary><strong>Click to view Telegram Setup Instructions</strong></summary>
 
-#### Phase 1: Create the Bot (Get the Token)
-1. Open Telegram and search for `@BotFather`.
-2. Start a chat and send the command: `/newbot`
-3. Follow the instructions to give your bot a name (e.g., MyHomeMonitor) and a username (must end in "bot", e.g., nwdta_router_bot).
-4. BotFather will send you a message containing your HTTP API Token. It looks like this: `123456789:ABCdefGhIJKlmNoPQRstUV`
-5. Save this! This is your `TELE_BOT_TOKEN`.
-6. *Keep this token safe!*
+1. **Get Token:** Chat with `@BotFather` on Telegram. Send `/newbot`. Copy the API Token.
+2. **Get Chat ID:** Send a message to your new bot. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` and look for `"chat":{"id":123456789}`.
 
-#### Phase 2: Get Your Chat ID
-The bot needs to know who to send the messages to.
-1. Search for your new bot by its username and press **Start**.
-2. Send a random message to the bot (like "Hello").
-3. Now, in your web browser, go to the following URL (replace `<YOUR_TOKEN>` with the token you got from BotFather):
-   `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
-4. Look for the part of the text that says `"chat":{"id":XXXXXXXXX`.
-5. The number (usually 9 or 10 digits) is your `TELE_CHAT_ID`.
-6. *Keep this number safe!*
+</details>
 
-> **Note:** If you are using a Group, the Chat ID will usually start with a minus sign (e.g., -100123456789).
+> **Tip:** You can update these securely at any time by running the `credentials` command shown in the Management section.
 
 > [!TIP]
 > The installer will ask for these during setup. If you change them later, use the secure command: `/etc/init.d/netwatchdta credentials`
