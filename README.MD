@@ -146,6 +146,7 @@ Configuration files are located in `/root/netwatchda/`.
 | `DEVICE_MONITOR` | `YES`/`NO`. Monitor local LAN devices. |
 | `DEV_SCAN_INTERVAL` | How often (in seconds) to check local devices. |
 | `DEV_FAIL_THRESHOLD` | Failed checks before marking a device as DOWN. |
+</details>
 
 > [!TIP]
 > ### Understanding "Silent Hours"
@@ -168,6 +169,7 @@ Configuration files are located in `/root/netwatchda/`.
 192.168.1.10   @ Home Server
 192.168.1.50   @ CCTV Camera
 10.0.0.5       @ IoT Gateway
+</details>
 
 ```
 
@@ -270,6 +272,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 ```
 
 ```
+
 
 
 
