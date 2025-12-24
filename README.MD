@@ -159,6 +159,18 @@ Configuration files are located in `/root/netwatchda/`.
 > 
 </details>
 
+### 2. `nwda_ips.conf`
+
+<details>
+<summary><strong>List the local devices you want to monitor.</summary></strong>
+
+```ini
+Format: IP_ADDRESS @ NAME
+192.168.1.10   @ Home Server
+192.168.1.50   @ CCTV Camera
+10.0.0.5       @ IoT Gateway
+</details>
+
 
 ```
 
@@ -261,6 +273,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 ```
 
 ```
+
 
 
 
