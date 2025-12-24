@@ -6,7 +6,8 @@
 
 It features **smart resource management** that automatically adjusts its execution strategy based on your router's available RAM, making it reliable on everything from tiny travel routers to enterprise gateways.
 
-![License](https://img.shields.io/badge/license-GPLv3-blue.svg) ![Platform](https://img.shields.io/badge/platform-OpenWrt-red.svg) ![Version](https://img.shields.io/badge/version-1.1-green.svg)
+![License](https://img.shields.io/badge/license-GPLv3-blue.svg) ![Platform](https://img.shields.io/badge/platform-OpenWrt-red.svg) ![Version](https://img.shields.io/badge/version-1.1-green.svg)![Network](https://img.shields.io/badge/Network-Monitoring-blue?style=for-the-badge&logo=wi-fi&logoColor=white)
+
 
 ![Monitoring](https://img.shields.io/badge/Status-Vigilant-success?style=for-the-badge&logo=eye&logoColor=white)
 
@@ -238,6 +239,7 @@ You will be prompted to either remove everything (including dependencies like `o
 
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
+
 
 
 
