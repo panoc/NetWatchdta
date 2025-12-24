@@ -78,6 +78,23 @@ The bot needs to know who to send the messages to.
 
 ## 🚀 Installation
 
+### Option A: OpenWrt (Routers)
+**Requirement:** OpenWrt 19.07+ and ~3MB free storage.
+Run this command in your router terminal:
+
+```sh
+wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "[https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/OpenWRT/install_netwatchdta_wrt.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/OpenWRT/install_netwatchdta_wrt.sh)" && sh /tmp/install_netwatchdta.sh
+
+```
+
+### Option B: Universal Linux (Debian, Ubuntu, Arch, Fedora, Pi)
+
+**Requirement:** `sudo` privileges. The script auto-detects your package manager (apt/dnf/pacman) to install dependencies.
+
+```sh
+sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "[https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/Linux/install_netwatchdta_linux.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/Linux/install_netwatchdta_linux.sh)" && sudo bash /tmp/install_netwatchdta.sh
+
+
 **Requirement:** You need at least **3MB free storage**.
 The script depends on `openssl-util` and `curl` to function securely. The installer will automatically handle dependencies for you.
 
