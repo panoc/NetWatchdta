@@ -1,30 +1,35 @@
 ### **Phase 1. Create the Bot (Get the Token)**
 
-- Open Telegram and search for @BotFather.
+1. Open Telegram and search for @BotFather.
 
-- Start a chat and send the command: /newbot
+2. Start a chat and send the command: /newbot
 
-- Follow the instructions to give your bot a name (e.g., MyHomeMonitor) and a username (must end in "bot", e.g., nwda_router_bot).
+3. Follow the instructions to give your bot a name (e.g., MyHomeMonitor) and a username (must end in "bot", e.g., nwda_router_bot).
 
-- BotFather will send you a message containing your HTTP API Token. It looks like this: 123456789:ABCdefGhIJKlmNoPQRstUV
+4. BotFather will send you a message containing your HTTP API Token. It looks like this: 123456789:ABCdefGhIJKlmNoPQRstUV
 
-- Save this! This is your TELE_BOT_TOKEN.
+5. Save this! This is your TELE_BOT_TOKEN.
 
 ### **Phase 2. Get Your Chat ID**
 
 The bot needs to know who to send the messages to.
 
-- Search for your new bot by its username and press Start.
+1. Search for your new bot by its username and press Start.
 
-- Send a random message to the bot (like "Hello").
+2. Send a random message to the bot (like "Hello").
 
-- Now, in your web browser, go to the following URL (replace <YOUR_TOKEN> with the token you got from BotFather): https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+3.- Now, in your web browser, go to the following URL (replace <YOUR_TOKEN> with the token you got from BotFather): https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
 
-- Look for the part of the text that says "chat":{"id":XXXXXXXXX.
+4.- Look for the part of the text that says "chat":{"id":XXXXXXXXX.
 
-- The number (usually 9 or 10 digits) is your TELE_CHAT_ID.
+5.- The number (usually 9 or 10 digits) is your TELE_CHAT_ID.
 
-        Note: If you are using a Group, the Chat ID will usually start with a minus sign (e.g., -100123456789).
+**Note:** 
+
+```sh
+If you are using a Group, the Chat ID will usually start with a minus sign (e.g., -100123456789).
+
+```
 
 3. Usage in the netwatchda Installer
 
@@ -40,3 +45,4 @@ When you run the script provided in Part 1 and 2, select option 2 (Telegram) or 
 
 
     Testing: The installer will automatically send a test message. If you don't receive it, ensure you have clicked "Start" on your bot in Telegram first, otherwise, it cannot message you.
+
