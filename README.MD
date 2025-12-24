@@ -104,7 +104,7 @@ Depending on your OS, the files are installed in standard locations:
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuration Guide
 
 Configuration files are located in `/root/netwatchdta/`.
 
@@ -168,14 +168,7 @@ Format: IP_ADDRESS @ NAME
 
 *After editing files, always restart the service.*
 
-```sh
-/etc/init.d/netwatchdta restart
-
-```
-
 ---
-
-## 🛠️ Management via Terminal
 
 `netwatchdta` installs a comprehensive system service.
 
