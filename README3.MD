@@ -42,10 +42,10 @@ It features **smart resource management** that automatically adjusts its executi
 ## 🔔 Discord and Telegram Configuration Guide
 
 ### Discrod ### 
-```sh
-To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
 
-<strong>Phase 1: Create the Discord Webhook</strong>
+To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
+```sh
+Phase 1: Create the Discord Webhook
 1.  Open Discord and right-click your server's text channel (e.g., `#logs`).
 2.  Select **Edit Channel** -> **Integrations** -> **Webhooks**.
 3.  Click **New Webhook**, name it (e.g., "Router Watchdog"), and copy the **Webhook URL**.
@@ -234,6 +234,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
