@@ -97,7 +97,7 @@ wget --no-check-certificate -qO /tmp/install_netwatchda.sh "https://raw.githubus
 4. Select some basic settings.
 5. Set up the `procd` system service (autostart).
 
-**Complete File Structure**
+<details>**Complete File Structure**
 
 After installation, the following files will exist:
 | File Path | Description |
@@ -108,9 +108,9 @@ After installation, the following files will exist:
 | /root/netwatchda/.vault.enc	| Encrypted file containing Discord/Telegram tokens. |
 | /etc/init.d/netwatchda	| The OpenWrt service management script. |
 | /tmp/netwatchda/nwda_uptime.log	| Human-readable event log (RAM-only). |
-| /tmp/netwatchda/nwda_ping.log	Detailed | ping history (Optional, RAM-only). |
+| /tmp/netwatchda/nwda_ping.log	 | Detailed ping history (Optional, RAM-only). |
 | /tmp/netwatchda/nwda_silent_buffer	| Temporary storage for Silent Mode summaries. |
-
+</details>
 
 ---
 
@@ -267,6 +267,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 ```
 
 ```
+
 
 
 
