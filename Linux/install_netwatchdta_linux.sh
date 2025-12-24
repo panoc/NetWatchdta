@@ -4,6 +4,14 @@
 # Licensed under the GNU General Public License v3.0
 
 # ==============================================================================
+#  SHELL COMPATIBILITY GUARD
+# ==============================================================================
+# This automatically re-launches the script with bash if executed via sh/dash.
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+
+# ==============================================================================
 #  SELF-CLEANUP MECHANISM
 # ==============================================================================
 # This ensures the installer script deletes itself after execution to keep
@@ -30,8 +38,9 @@ WHITE='\033[1;37m'  # Bold White (High Contrast)
 # ==============================================================================
 #  ROOT PRIVILEGE CHECK
 # ==============================================================================
-if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}❌ Error: This script must be run as root (sudo).${NC}"
+if [ "$(id -u)" -ne 0 ]; then
+  echo -e "${RED}❌ Error: This script must be run as root.${NC}"
+  echo -e "${YELLOW}👉 Please run: sudo bash $SCRIPT_NAME${NC}"
   exit 1
 fi
 
@@ -83,7 +92,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.1 (Universal Linux by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.2 (Universal Linux by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -96,7 +105,7 @@ if [ "$ANSWER_YN" = "n" ]; then
 fi
 
 # ==============================================================================
-#  DIRECTORY & FILE PATH DEFINITIONS (ADAPTED FOR LINUX)
+#  DIRECTORY & FILE PATH DEFINITIONS
 # ==============================================================================
 INSTALL_DIR="/opt/netwatchdta"
 TMP_DIR="/tmp/netwatchdta"
@@ -119,7 +128,7 @@ echo -e "\n${BOLD}📦 Checking system readiness...${NC}"
 PKG_MAN=""
 INSTALL_CMD=""
 UPDATE_CMD=""
-PKG_LIST="curl openssl ca-certificates iputils-ping bc" # Standard Linux names
+PKG_LIST="curl openssl ca-certificates iputils-ping bc" 
 
 if command -v apt-get >/dev/null; then
     PKG_MAN="apt"
@@ -129,12 +138,12 @@ elif command -v dnf >/dev/null; then
     PKG_MAN="dnf"
     INSTALL_CMD="dnf install -y"
     UPDATE_CMD="dnf check-update"
-    PKG_LIST="curl openssl ca-certificates iputils bc" # Fedora/CentOS naming
+    PKG_LIST="curl openssl ca-certificates iputils bc"
 elif command -v pacman >/dev/null; then
     PKG_MAN="pacman"
     INSTALL_CMD="pacman -S --noconfirm"
     UPDATE_CMD="pacman -Sy"
-    PKG_LIST="curl openssl ca-certificates iputils bc" # Arch naming
+    PKG_LIST="curl openssl ca-certificates iputils bc"
 elif command -v yum >/dev/null; then
     PKG_MAN="yum"
     INSTALL_CMD="yum install -y"
@@ -341,7 +350,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     done
     
-    # 3d. Summary Display (Updated Formatting)
+    # 3d. Summary Display
     echo -e "\n${BOLD}${WHITE}Selected Notification Strategy:${NC}"
     if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ "$TELEGRAM_ENABLE_VAL" = "YES" ]; then
         echo -e "   • ${BOLD}${WHITE}BOTH${NC}"
@@ -383,7 +392,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         done
     fi
     
-    # 3f. Heartbeat Logic (Updated with Start Hour)
+    # 3f. Heartbeat Logic
     HB_VAL="NO"
     HB_SEC="86400"
     HB_MENTION="NO"
@@ -453,7 +462,8 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         3) EXT_VAL="YES"; DEV_VAL="NO"  ;;
         *) EXT_VAL="YES"; DEV_VAL="YES" ;;
     esac
-# ==============================================================================
+
+    # ==============================================================================
     #  STEP 4: GENERATE CONFIGURATION FILES
     # ==============================================================================
     cat <<EOF > "$CONFIG_FILE"
@@ -552,7 +562,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     if echo -n "$VAULT_DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -out "$VAULT_FILE" 2>/dev/null; then
         echo -e "${GREEN}✅ Credentials Encrypted and locked to this machine ID.${NC}"
     else
-        echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl-util.${NC}"
+        echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl installation.${NC}"
     fi
 fi
 
@@ -853,6 +863,9 @@ $SUMMARY_CONTENT"
                              echo "Internet Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                          fi
                     else
+                         # Alert logic logic handles buffering via send_notification if truly down
+                         # But since net_stat is DOWN, send_notification will buffer it automatically.
+                         # This block is just for logging mainly.
                          :
                     fi
                 fi
@@ -981,7 +994,7 @@ get_hw_key() {
     local seed="nwdta_v1_linux_secure_seed_2025"
     local machine_id=\$(cat /etc/machine-id 2>/dev/null)
     [ -z "\$machine_id" ] && machine_id=\$(cat /sys/class/dmi/id/product_uuid 2>/dev/null)
-    [ -z "\$machine_id" ] && machine_id="unknown_linux_host"
+    [ -z "\$machine_id" ] && machine_id=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
     echo -n "\${seed}\${machine_id}" | openssl dgst -sha256 | awk '{print \$2}'
 }
 
