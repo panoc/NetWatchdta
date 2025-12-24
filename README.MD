@@ -206,7 +206,6 @@ top -b -n 1 | grep netwatchda
 * **Peak (During Alert):** ~4 MB - 6 MB
 ---
 
-```
 ### 📊 RAM Usage Scaling (Stress Test: 50 Simultaneous Events)
 
 The following table illustrates how `netwatchda` manages memory during a "mass event" (e.g., a network switch failure causing 50 devices to go offline instantly).
@@ -220,7 +219,6 @@ The following table illustrates how `netwatchda` manages memory during a "mass e
 
 > **Note:** Parallel Mode trades spare RAM for speed. The installer automatically restricts Parallel Mode to routers with sufficient memory to absorb these spikes safely.
 
-```
 ## 🗑️ Uninstallation
 
 To completely remove `netwatchda`, use the built-in purge command:
@@ -245,6 +243,7 @@ You will be prompted to either remove everything (including dependencies like `o
 
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
+
 
 
 
