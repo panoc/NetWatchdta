@@ -84,7 +84,7 @@ The script depends on `openssl-util` and `curl` to function securely. The instal
 **Run this command in your OpenWrt terminal:**
 
 ```sh
-wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchda/refs/heads/main/OpenWRT/install_netwatchdta_wrt.sh" && sh /tmp/install_netwatchdta.sh
+wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/OpenWRT/install_netwatchdta_wrt.sh" && sh /tmp/install_netwatchdta.sh
 
 ```
 
