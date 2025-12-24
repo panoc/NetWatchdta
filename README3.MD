@@ -177,7 +177,7 @@ If you prefer the web interface, you can add control buttons to your router's da
 | **View Activity Logs** | `/etc/init.d/netwatchda logs` |
 | **Restart Service** | `/etc/init.d/netwatchda restart` |
 
-[image]https://raw.githubusercontent.com/panoc/NetWatchda/refs/heads/main/images/custom-commands.png [/image]
+![Alt text](./images/custom-commands.png)
 ---
 
 ## 📊 Resource Usage
@@ -224,6 +224,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
