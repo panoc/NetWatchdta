@@ -120,8 +120,6 @@ Configuration files are located in the Base Folder (see above).
 
 <details>
 
-</details>
-
 <summary><strong>1. nwdta_settings.conf - Controls the behavior of the daemon.</strong></summary>
 
 | Setting | Description |
