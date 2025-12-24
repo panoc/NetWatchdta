@@ -1,4 +1,4 @@
-# netwatchdta ![](https://icongr.am/octicons/broadcast.svg?size=24&color=0366d6)
+# ![](https://icongr.am/octicons/broadcast.svg?size=24&color=0366d6) netwatchdta
 ![License](https://img.shields.io/badge/license-GPLv3-blue.svg) ![Platform](https://img.shields.io/badge/platform-OpenWrt-red.svg) ![Network](https://img.shields.io/badge/Network-Monitoring-orange.svg) ![Version](https://img.shields.io/badge/version-1.1-green.svg)
 
 ### Advanced Network Monitoring & Alerting for OpenWrt
