@@ -8,6 +8,7 @@
 # ==============================================================================
 # This ensures the installer script deletes itself after execution to keep
 # the /tmp directory clean.
+# the /tmp directory clean.
 SCRIPT_NAME="$0"
 cleanup() {
     rm -f "$SCRIPT_NAME"
@@ -75,7 +76,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} v1.5 (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchda Automated Setup${NC} v0.1 (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -480,8 +481,8 @@ get_hw_key() {
     local seed="nwda_v1_secure_seed_2025"
     local cpu_serial=$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print $3}')
     [ -z "$cpu_serial" ] && cpu_serial="unknown_serial"
-    local mac_addr=$(cat /sys/class/net/eth0/address 2>/dev/null)
-    [ -z "$mac_addr" ] && mac_addr=$(cat /sys/class/net/br-lan/address 2>/dev/null)
+    local mac_addr=$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
+    [ -z "$mac_addr" ] && mac_addr="00:00:00:00:00:00"
     echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
 }
 
@@ -566,8 +567,8 @@ get_hw_key() {
     local seed="nwda_v1_secure_seed_2025"
     local cpu_serial=$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print $3}')
     [ -z "$cpu_serial" ] && cpu_serial="unknown_serial"
-    local mac_addr=$(cat /sys/class/net/eth0/address 2>/dev/null)
-    [ -z "$mac_addr" ] && mac_addr=$(cat /sys/class/net/br-lan/address 2>/dev/null)
+    local mac_addr=$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
+    [ -z "$mac_addr" ] && mac_addr="00:00:00:00:00:00"
     echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
 }
 
@@ -954,11 +955,11 @@ load_functions() {
 
 get_hw_key() {
     local seed="nwda_v1_secure_seed_2025"
-    local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print \$3}')
-    [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
-    local mac_addr=\$(cat /sys/class/net/eth0/address 2>/dev/null)
-    [ -z "\$mac_addr" ] && mac_addr=\$(cat /sys/class/net/br-lan/address 2>/dev/null)
-    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
+    local cpu_serial=$(grep -i "serial" /proc/cpuinfo | head -1 | awk '{print $3}')
+    [ -z "$cpu_serial" ] && cpu_serial="unknown_serial"
+    local mac_addr=$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
+    [ -z "$mac_addr" ] && mac_addr="00:00:00:00:00:00"
+    echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
 }
 
 get_decrypted_creds() {
