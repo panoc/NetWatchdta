@@ -76,7 +76,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.1 (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.2 (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -95,6 +95,7 @@ INSTALL_DIR="/root/netwatchdta"
 TMP_DIR="/tmp/netwatchdta"
 CONFIG_FILE="$INSTALL_DIR/nwdta_settings.conf"
 IP_LIST_FILE="$INSTALL_DIR/nwdta_ips.conf"
+REMOTE_LIST_FILE="$INSTALL_DIR/remote_ips.conf"
 VAULT_FILE="$INSTALL_DIR/.vault.enc"
 SERVICE_NAME="netwatchdta"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
@@ -403,16 +404,16 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
 
     # 3g. Monitoring Mode Selection
     echo -e "\n${BLUE}--- Monitoring Mode ---${NC}"
-    echo -e "   1. ${BOLD}${WHITE}Both (Default)${NC}"
+    echo -e "   1. ${BOLD}${WHITE}All (Internet + Devices + Remote)${NC}"
     echo -e "   2. ${BOLD}${WHITE}Device Connectivity only${NC}"
     echo -e "   3. ${BOLD}${WHITE}Internet Connectivity only${NC}"
     
     ask_opt "Enter choice" "3"
 
     case "$ANSWER_OPT" in
-        2) EXT_VAL="NO";  DEV_VAL="YES" ;;
-        3) EXT_VAL="YES"; DEV_VAL="NO"  ;;
-        *) EXT_VAL="YES"; DEV_VAL="YES" ;;
+        2) EXT_VAL="NO";  DEV_VAL="YES"; REM_VAL="NO" ;;
+        3) EXT_VAL="YES"; DEV_VAL="NO";  REM_VAL="NO" ;;
+        *) EXT_VAL="YES"; DEV_VAL="YES"; REM_VAL="YES" ;;
     esac
 
     # ==============================================================================
@@ -460,6 +461,12 @@ DEVICE_MONITOR=$DEV_VAL # Enable monitoring of local IPs (YES/NO). Default is YE
 DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
 DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
 DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
+
+[Remote Device Monitoring]
+REMOTE_MONITOR=$REM_VAL # Enable monitoring of Remote IPs (YES/NO). Default is YES.
+REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
+REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
+REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
 EOF
 
     # Generate default IP list
@@ -470,6 +477,13 @@ EOF
     # Attempt to auto-detect local gateway IP for user convenience
     LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
     [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
+
+    # Generate default Remote IP list
+    cat <<EOF > "$REMOTE_LIST_FILE"
+# Format: IP_ADDRESS @ NAME
+# Example: 142.250.180.206 @ Google Server
+# Note: These are ONLY checked if Internet is UP (Strict Dependency).
+EOF
 fi
 # ==============================================================================
 #  STEP 5: SECURE CREDENTIAL VAULT (OPENSSL ENFORCED)
@@ -512,6 +526,7 @@ cat <<'EOF' > "$INSTALL_DIR/netwatchdta.sh"
 # --- DIRECTORY DEFS ---
 BASE_DIR="/root/netwatchdta"
 IP_LIST_FILE="$BASE_DIR/nwdta_ips.conf"
+REMOTE_LIST_FILE="$BASE_DIR/remote_ips.conf"
 CONFIG_FILE="$BASE_DIR/nwdta_settings.conf"
 VAULT_FILE="$BASE_DIR/.vault.enc"
 
@@ -534,7 +549,9 @@ if [ ! -f "$NET_STATUS_FILE" ]; then echo "UP" > "$NET_STATUS_FILE"; fi
 # Tracking Variables
 LAST_EXT_CHECK=0
 LAST_DEV_CHECK=0
+LAST_REM_CHECK=0
 LAST_HB_CHECK=0 # Initialized to 0 to trigger check logic immediately
+EXT_UP_GLOBAL=1 # 1 = UP, 0 = DOWN (Used for Remote Logic dependency)
 
 # --- HELPER: LOGGING ---
 log_msg() {
@@ -779,6 +796,9 @@ $SUMMARY_CONTENT"
             EXT_UP=0
             if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
             elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
+            
+            # Global Variable Update for Remote Logic
+            EXT_UP_GLOBAL=$EXT_UP
 
             if [ "$EXT_UP" -eq 0 ]; then
                 C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
@@ -822,56 +842,93 @@ $SUMMARY_CONTENT"
                 echo 0 > "$FC"
             fi
         fi
+    else
+        # If internet monitoring is disabled, assume it is UP so Remote checks run
+        EXT_UP_GLOBAL=1
     fi
+
+    # --- SHARED CHECK FUNCTION ---
+										  
+																		   
+								   
+			
+    check_ip_logic() {
+        TIP=$1; NAME=$2; TYPE=$3; THRESH=$4; P_COUNT=$5
+        
+        SIP=$(echo "$TIP" | tr '.' '_')
+        FC="$TMP_DIR/${TYPE}_${SIP}_c"; FD="$TMP_DIR/${TYPE}_${SIP}_d"; FT="$TMP_DIR/${TYPE}_${SIP}_t"
+        
+        if ping -q -c "$P_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
+            if [ -f "$FD" ]; then
+                DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$(( $(date +%s) - DSSEC ))
+                DR_STR="$((DUR/60))m $((DUR%60))s"
+                CUR_TIME=$(date '+%b %d %H:%M:%S')
+                D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
+                T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
+                log_msg "[SUCCESS] ${TYPE}: $NAME Online ($DR_STR)" "UPTIME"
+                
+																				  
+										 
+																							   
+														  
+														  
+																																				   
+																								 
+																				   
+						
+                if [ "$IS_SILENT" -eq 1 ]; then
+                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                         echo "${TYPE} $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
+                     fi
+							
+																													 
+						  
+										 
+					  
+								  
+                else
+																				  
+																				 
+																									 
+																	  
+																								  
+																					 
+						 
+														
+																												 
+																				  
+							   
+							 
+                     send_notification "🟢 ${TYPE} Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
+						   
+					  
+                fi
+                rm -f "$FD" "$FT"
+            fi
+            echo 0 > "$FC"
+        else
+            C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+            if [ "$C" -ge "$THRESH" ] && [ ! -f "$FD" ]; then
+                 TS=$(date '+%b %d %H:%M:%S'); echo "$(date +%s)" > "$FD"; echo "$TS" > "$FT"
+                 log_msg "[ALERT] ${TYPE}: $NAME Down" "UPTIME"
+                 D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Time:** $TS"
+                 T_MSG="🔴 ${TYPE} Down * $ROUTER_NAME - $NAME - $TIP - $TS"
+                 
+                 if [ "$IS_SILENT" -eq 1 ]; then
+                     if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
+                         echo "${TYPE} $NAME DOWN: $TS" >> "$SILENT_BUFFER"
+                     fi
+                 else
+                     send_notification "🔴 ${TYPE} Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
+                 fi
+            fi
+        fi
+    }
 
     # --- DEVICE MONITORING ---
     if [ "$DEVICE_MONITOR" = "YES" ]; then
         if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
             LAST_DEV_CHECK=$NOW_SEC
-            
-            check_device_logic() {
-                TIP=$1; NAME=$2
-                SIP=$(echo "$TIP" | tr '.' '_')
-                FC="$TMP_DIR/dev_${SIP}_c"; FD="$TMP_DIR/dev_${SIP}_d"; FT="$TMP_DIR/dev_${SIP}_t"
-                
-                if ping -q -c "$DEV_PING_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
-                    if [ -f "$FD" ]; then
-                        DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$(( $(date +%s) - DSSEC ))
-                        DR_STR="$((DUR/60))m $((DUR%60))s"
-                        CUR_TIME=$(date '+%b %d %H:%M:%S')
-                        D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
-                        T_MSG="🟢 Device UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
-                        log_msg "[SUCCESS] Device: $NAME Online ($DR_STR)" "UPTIME"
-                        
-                        if [ "$IS_SILENT" -eq 1 ]; then
-                             if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                                 echo "Device $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
-                             fi
-                        else
-                             send_notification "🟢 Device Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
-                        fi
-                        rm -f "$FD" "$FT"
-                    fi
-                    echo 0 > "$FC"
-                else
-                    C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
-                    if [ "$C" -ge "$DEV_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
-                         TS=$(date '+%b %d %H:%M:%S'); echo "$(date +%s)" > "$FD"; echo "$TS" > "$FT"
-                         log_msg "[ALERT] Device: $NAME Down" "UPTIME"
-                         D_MSG="**Router:** $ROUTER_NAME\n**Device:** $NAME ($TIP)\n**Time:** $TS"
-                         T_MSG="🔴 Device Down * $ROUTER_NAME - $NAME - $TIP - $TS"
-                         
-                         if [ "$IS_SILENT" -eq 1 ]; then
-                             if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                                 echo "Device $NAME DOWN: $TS" >> "$SILENT_BUFFER"
-                             fi
-                         else
-                             send_notification "🔴 Device Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
-                         fi
-                    fi
-                fi
-            }
-
             if [ "$EXEC_METHOD" -eq 1 ]; then
                 # PARALLEL EXECUTION
                 grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
@@ -879,7 +936,7 @@ $SUMMARY_CONTENT"
                         TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
                         NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
                         [ -z "$NAME" ] && NAME="$TIP"
-                        [ -n "$TIP" ] && check_device_logic "$TIP" "$NAME"
+                        [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT"
                     ) &
                 done; wait
             else
@@ -888,7 +945,32 @@ $SUMMARY_CONTENT"
                     TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
                     NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
                     [ -z "$NAME" ] && NAME="$TIP"
-                    [ -n "$TIP" ] && check_device_logic "$TIP" "$NAME"
+                    [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT"
+                done
+            fi
+        fi
+    fi
+
+    # --- REMOTE MONITORING (STRICT INTERNET DEPENDENCY) ---
+    # Logic: Only run if Internet (EXT_UP_GLOBAL) is UP (1).
+    if [ "$REMOTE_MONITOR" = "YES" ] && [ "$EXT_UP_GLOBAL" -eq 1 ]; then
+        if [ $((NOW_SEC - LAST_REM_CHECK)) -ge "$REM_SCAN_INTERVAL" ]; then
+            LAST_REM_CHECK=$NOW_SEC
+            if [ "$EXEC_METHOD" -eq 1 ]; then
+                grep -vE '^#|^$' "$REMOTE_LIST_FILE" | while read -r line; do
+                    (
+                        TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
+                        NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
+                        [ -z "$NAME" ] && NAME="$TIP"
+                        [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT"
+                    ) &
+                done; wait
+            else
+                grep -vE '^#|^$' "$REMOTE_LIST_FILE" | while read -r line; do
+                    TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
+                    NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
+                    [ -z "$NAME" ] && NAME="$TIP"
+                    [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT"
                 done
             fi
         fi
