@@ -267,11 +267,6 @@ You will be prompted to either remove everything (including dependencies like `o
 Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
 
-```
-
-```
-
-
 
 
 
