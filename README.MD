@@ -214,8 +214,6 @@ If you prefer the web interface on OpenWrt, you can add control buttons to your 
 <details>
 <summary><strong>🔍 Click to zoom image</strong></summary>
 
-</details>
-
 ![Custom Commands](images/custom-commands.png)
 </details>
 
