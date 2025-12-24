@@ -42,7 +42,7 @@ It features **smart resource management** that automatically adjusts its executi
 ## 🔔 Discord and Telegram Configuration Guide
 
 ### Discrod ### 
-```
+```sh
 To receive alerts, you need a Webhook URL. If you want mentions (pings), you also need your User ID.
 
 <strong>Phase 1: Create the Discord Webhook</strong>
@@ -197,5 +197,6 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
