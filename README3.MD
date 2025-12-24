@@ -4,7 +4,7 @@ I have combined your detailed guides (Discord/LuCI) with the technical accuracy 
 
 You can copy the code block below directly into your repository.
 
-```markdown
+
 # netwatchda 🚀
 
 ### Advanced Network Monitoring & Alerting for OpenWrt
@@ -191,5 +191,6 @@ Copyright (C) 2025 panoc.
 This project is licensed under the **GNU General Public License v3.0**.
 
 ```
+
 
 ```
