@@ -175,7 +175,6 @@ If you prefer the web interface, you can add control buttons to your router's da
 | --- | --- |
 | **Check Status** | `/etc/init.d/netwatchda status` |
 | **View Activity Logs** | `/etc/init.d/netwatchda logs` |
-| **Test Discord Link** | `/etc/init.d/netwatchda discord` |
 | **Restart Service** | `/etc/init.d/netwatchda restart` |
 
 ---
@@ -224,6 +223,7 @@ This project is licensed under the **GNU General Public License v3.0**.
 
 
 ```
+
 
 
 
