@@ -8,7 +8,6 @@
 # ==============================================================================
 # This ensures the installer script deletes itself after execution to keep
 # the /tmp directory clean.
-# the /tmp directory clean.
 SCRIPT_NAME="$0"
 cleanup() {
     rm -f "$SCRIPT_NAME"
@@ -76,7 +75,7 @@ ask_opt() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.2 (by ${BOLD}panoc${NC})"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.4 (by ${BOLD}panoc${NC})"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -93,8 +92,8 @@ fi
 # ==============================================================================
 INSTALL_DIR="/root/netwatchdta"
 TMP_DIR="/tmp/netwatchdta"
-CONFIG_FILE="$INSTALL_DIR/nwdta_settings.conf"
-IP_LIST_FILE="$INSTALL_DIR/nwdta_ips.conf"
+CONFIG_FILE="$INSTALL_DIR/settings.conf"
+IP_LIST_FILE="$INSTALL_DIR/device_ips.conf"
 REMOTE_LIST_FILE="$INSTALL_DIR/remote_ips.conf"
 VAULT_FILE="$INSTALL_DIR/.vault.enc"
 SERVICE_NAME="netwatchdta"
@@ -303,7 +302,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     done
     
-    # 3d. Summary Display (Updated Formatting)
+    # 3d. Summary Display
     echo -e "\n${BOLD}${WHITE}Selected Notification Strategy:${NC}"
     if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ "$TELEGRAM_ENABLE_VAL" = "YES" ]; then
         echo -e "   • ${BOLD}${WHITE}BOTH${NC}"
@@ -402,25 +401,11 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     fi
 
-    # 3g. Monitoring Mode Selection
-    echo -e "\n${BLUE}--- Monitoring Mode ---${NC}"
-    echo -e "   1. ${BOLD}${WHITE}All (Internet + Devices + Remote)${NC}"
-    echo -e "   2. ${BOLD}${WHITE}Device Connectivity only${NC}"
-    echo -e "   3. ${BOLD}${WHITE}Internet Connectivity only${NC}"
-    
-    ask_opt "Enter choice" "3"
-
-    case "$ANSWER_OPT" in
-        2) EXT_VAL="NO";  DEV_VAL="YES"; REM_VAL="NO" ;;
-        3) EXT_VAL="YES"; DEV_VAL="NO";  REM_VAL="NO" ;;
-        *) EXT_VAL="YES"; DEV_VAL="YES"; REM_VAL="YES" ;;
-    esac
-
     # ==============================================================================
     #  STEP 4: GENERATE CONFIGURATION FILES (UPDATED FORMAT)
     # ==============================================================================
     cat <<EOF > "$CONFIG_FILE"
-# nwdta_settings.conf - Configuration for netwatchdta
+# settings.conf - Configuration for netwatchdta
 # Note: Credentials are stored in .vault.enc (Method: OPENSSL)
 ROUTER_NAME="$router_name_input"
 EXEC_METHOD=$AUTO_EXEC_METHOD # 1 = Parallel (Fast, High RAM > 256MB), 2 = Sequential (Safe, Low RAM < 256MB)
@@ -448,7 +433,7 @@ HB_TARGET=$HB_TARGET # Target for Heartbeat: DISCORD, TELEGRAM, BOTH
 HB_START_HOUR=$HB_START_HOUR # Time of Heartbeat will start, also if 24H interval is selected time of day Heartbeat will notify. Default is 12.
 
 [Internet Connectivity]
-EXT_ENABLE=$EXT_VAL # Global toggle for internet monitoring (YES/NO). Default is YES.
+EXT_ENABLE=YES # Global toggle for internet monitoring (YES/NO). Default is YES.
 EXT_IP=1.1.1.1 # Primary external IP to monitor. Default is 1.1.1.1.
 EXT_IP2=8.8.8.8 # Secondary external IP for redundancy. Default is 8.8.8.8.
 EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
@@ -457,13 +442,13 @@ EXT_PING_COUNT=4 # Number of packets per internet check. Default is 4.
 EXT_PING_TIMEOUT=1 # Seconds to wait for ping response. Default is 1.
 
 [Local Device Monitoring]
-DEVICE_MONITOR=$DEV_VAL # Enable monitoring of local IPs (YES/NO). Default is YES.
+DEVICE_MONITOR=YES # Enable monitoring of local IPs (YES/NO). Default is YES.
 DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
 DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
 DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
 
 [Remote Device Monitoring]
-REMOTE_MONITOR=$REM_VAL # Enable monitoring of Remote IPs (YES/NO). Default is YES.
+REMOTE_MONITOR=YES # Enable monitoring of Remote IPs (YES/NO). Default is YES.
 REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
 REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
 REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
@@ -525,9 +510,9 @@ cat <<'EOF' > "$INSTALL_DIR/netwatchdta.sh"
 
 # --- DIRECTORY DEFS ---
 BASE_DIR="/root/netwatchdta"
-IP_LIST_FILE="$BASE_DIR/nwdta_ips.conf"
+IP_LIST_FILE="$BASE_DIR/device_ips.conf"
 REMOTE_LIST_FILE="$BASE_DIR/remote_ips.conf"
-CONFIG_FILE="$BASE_DIR/nwdta_settings.conf"
+CONFIG_FILE="$BASE_DIR/settings.conf"
 VAULT_FILE="$BASE_DIR/.vault.enc"
 
 # Flash Paths
@@ -848,10 +833,6 @@ $SUMMARY_CONTENT"
     fi
 
     # --- SHARED CHECK FUNCTION ---
-										  
-																		   
-								   
-			
     check_ip_logic() {
         TIP=$1; NAME=$2; TYPE=$3; THRESH=$4; P_COUNT=$5
         
@@ -867,41 +848,12 @@ $SUMMARY_CONTENT"
                 T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
                 log_msg "[SUCCESS] ${TYPE}: $NAME Online ($DR_STR)" "UPTIME"
                 
-																				  
-										 
-																							   
-														  
-														  
-																																				   
-																								 
-																				   
-						
                 if [ "$IS_SILENT" -eq 1 ]; then
                      if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
                          echo "${TYPE} $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
                      fi
-							
-																													 
-						  
-										 
-					  
-								  
                 else
-																				  
-																				 
-																									 
-																	  
-																								  
-																					 
-						 
-														
-																												 
-																				  
-							   
-							 
                      send_notification "🟢 ${TYPE} Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
-						   
-					  
                 fi
                 rm -f "$FD" "$FT"
             fi
@@ -1031,7 +983,7 @@ clear() {
 
 load_functions() {
     if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
-        . "$INSTALL_DIR/nwdta_settings.conf" 2>/dev/null
+        . "$INSTALL_DIR/settings.conf" 2>/dev/null
     fi
 }
 
@@ -1129,50 +1081,51 @@ purge() {
     echo -e "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
     echo -e "\033[1;31m=======================================================\033[0m"
     echo ""
-    echo "1. Full Uninstall (Remove everything)"
-    echo "2. Keep Settings (Remove logic but keep config)"
-    echo "3. Cancel"
-    printf "Choice [1-3]: "
+    echo -e "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
+    echo -e "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
+    echo -e "\033[1;37m3.\033[0m Cancel"
+    printf "\033[1mChoice [1-3]: \033[0m"
     read choice </dev/tty
     
     case "\$choice" in
         1)
-            echo "🛑 Stopping service..."
+            echo ""
+            echo -e "\033[1;33m🛑 Stopping service...\033[0m"
             /etc/init.d/netwatchdta stop
             /etc/init.d/netwatchdta disable
             
-            echo "📦 Checking dependencies..."
-            printf "❓ Remove curl, openssl-util, and ca-bundle? (May break other apps) [y/N]: "
-            read rem_deps </dev/tty
-            if [ "\$rem_deps" = "y" ] || [ "\$rem_deps" = "Y" ]; then
-                opkg remove curl openssl-util ca-bundle
-                echo "Dependencies removed."
-            else
-                echo "Dependencies kept."
-            fi
-
-            echo "🧹 Cleaning up /tmp and buffers..."
+            echo -e "\033[1;33m🧹 Cleaning up /tmp and buffers...\033[0m"
             rm -rf "/tmp/netwatchdta"
-            echo "🗑️  Removing installation directory..."
+            
+            echo -e "\033[1;33m🗑️  Removing installation directory...\033[0m"
             rm -rf "$INSTALL_DIR"
-            echo "🔥 Self-destructing service file..."
+            
+            echo -e "\033[1;33m🔥 Self-destructing service file...\033[0m"
             rm -f "$SERVICE_PATH"
+            
+            echo ""
             echo -e "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
             ;;
         2)
-            echo "🛑 Stopping service..."
+            echo ""
+            echo -e "\033[1;33m🛑 Stopping service...\033[0m"
             /etc/init.d/netwatchdta stop
             /etc/init.d/netwatchdta disable
-            echo "🧹 Cleaning up /tmp..."
+            
+            echo -e "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
             rm -rf "/tmp/netwatchdta"
-            echo "🗑️  Removing core script..."
+            
+            echo -e "\033[1;33m🗑️  Removing core script...\033[0m"
             rm -f "$INSTALL_DIR/netwatchdta.sh"
-            echo "🔥 Removing service file..."
+            
+            echo -e "\033[1;33m🔥 Removing service file...\033[0m"
             rm -f "$SERVICE_PATH"
+            
+            echo ""
             echo -e "\033[1;33m✅ Logic removed. Settings preserved in $INSTALL_DIR\033[0m"
             ;;
         *)
-            echo "❌ Purge cancelled."
+            echo -e "\033[1;31m❌ Purge cancelled.\033[0m"
             exit 0
             ;;
     esac
