@@ -80,7 +80,7 @@ wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubu
 ```
 
 ### Option B: Universal Linux (Debian, Ubuntu, Arch, Fedora, Pi)
-Compatible with most Linux distros :  ✅ Ubuntu, Debian, Mint, Kali, Raspberry Pi OS ✅ Fedora, CentOS, RHEL, AlmaLinux, Rocky ✅ Arch Linux, Manjaro, EndeavourOS
+Compatible with most Linux distros :  ✅ Ubuntu, Debian, Mint, Kali, Raspberry Pi OS ✅ Fedora, CentOS, RHEL, AlmaLinux, Rocky ✅ Manjaro, Arch Linux, EndeavourOS
 
 **Requirement:** `sudo` privileges. The script auto-detects your package manager to install dependencies.
 
