@@ -75,25 +75,25 @@ ask_opt() {
 #  PORTABLE FETCH WRAPPER (INSTALLER VERSION)
 # ==============================================================================
 # Defined early so the installer can use it for connectivity tests.
+# FIX: Prioritizes uclient-fetch to save RAM, but includes 204 patch.
 safe_fetch() {
     local url="$1"
     local data="$2"   # JSON Payload
     local header="$3" # e.g. "Content-Type: application/json"
 
-    # STRATEGY 1: Standard Linux (Curl) - Best if available
+    # STRATEGY 1: uclient-fetch (Native & Light - Preferred)
+    if command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ] || [ -x /usr/bin/uclient-fetch ]; then
+        uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
+        return 0 # Force success to handle Discord 204
+    fi
+
+    # STRATEGY 2: Curl (Robust Fallback)
     if command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
         return 0
     fi
 
-    # STRATEGY 2: OpenWrt Native (uclient-fetch)
-    # FIX: Check for multiple paths to ensure we find it.
-    if command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ] || [ -x /usr/bin/uclient-fetch ]; then
-        uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-        return 0 
-    fi
-
-    # STRATEGY 3: Wget (Standard Linux Alternative)
+    # STRATEGY 3: Wget (Last Resort)
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
@@ -107,7 +107,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.51 (Discord 204 Fix)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.6 (Toggle Added)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -443,6 +443,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
 # settings.conf - Configuration for netwatchdta
 # Note: Credentials are stored in .vault.enc (Method: OPENSSL)
 ROUTER_NAME="$router_name_input"
+FETCH_TOOL="AUTO" # Options: AUTO, UCLIENT, CURL, WGET. WARNING: Change only if you know what you are doing.
 EXEC_METHOD=$AUTO_EXEC_METHOD # 1 = Parallel (Fast, High RAM > 256MB), 2 = Sequential (Safe, Low RAM < 256MB)
 
 [Log Settings]
@@ -647,26 +648,43 @@ load_credentials() {
 }
 
 # ==============================================================================
-#  PORTABLE FETCH WRAPPER
+#  PORTABLE FETCH WRAPPER (CORE ENGINE VERSION)
 # ==============================================================================
 safe_fetch() {
     local url="$1"
     local data="$2"
     local header="$3"
 
-    # STRATEGY 1: Curl
-    if command -v curl >/dev/null 2>&1; then
+    # --- 1. CHECK FORCED TOOL ---
+    if [ "$FETCH_TOOL" = "CURL" ] && command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
-        return 0 # Assume success if executed
+        return 0
+    fi
+    if [ "$FETCH_TOOL" = "UCLIENT" ] && (command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ] || [ -x /usr/bin/uclient-fetch]); then
+        uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
+        return 0
+    fi
+    if [ "$FETCH_TOOL" = "WGET" ] && command -v wget >/dev/null 2>&1; then
+        wget -q --no-check-certificate --header="$header" \
+             --post-data="$data" "$url" -O /dev/null
+        return 0
     fi
 
-    # STRATEGY 2: uclient-fetch (OpenWrt Native)
+    # --- 2. AUTO PRIORITY (Native First) ---
+    
+    # Priority A: uclient-fetch (Lightweight)
     if command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ] || [ -x /usr/bin/uclient-fetch ]; then
         uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-        return $?
+        return 0 
     fi
 
-    # STRATEGY 3: Wget
+    # Priority B: Curl (Robust)
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
+        return 0
+    fi
+
+    # Priority C: Wget (Fallback)
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
@@ -696,24 +714,7 @@ send_payload() {
              else
                 d_payload="{\"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}"
              fi
-             
-             if safe_fetch "$DISCORD_WEBHOOK" "$d_payload" "Content-Type: application/json"; then 
-                 success=1
-             else 
-                 # FIX: If safe_fetch returned error (exit code 1), but we are using uclient-fetch,
-                 # we assume it is the Discord 204 issue and suppress the error log.
-                 if command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ] || [ -x /usr/bin/uclient-fetch ]; then
-                     if ! command -v curl >/dev/null 2>&1; then
-                         # Curl not found, so uclient-fetch likely used. Suppress error.
-                         success=1
-                     else
-                         # Curl is present, so failure is real.
-                         log_msg "[ERROR] Discord send failed." "UPTIME" "$NOW_HUMAN"
-                     fi
-                 else
-                     log_msg "[ERROR] Discord send failed." "UPTIME" "$NOW_HUMAN"
-                 fi
-             fi
+             if safe_fetch "$DISCORD_WEBHOOK" "$d_payload" "Content-Type: application/json"; then success=1; else log_msg "[ERROR] Discord send failed." "UPTIME" "$NOW_HUMAN"; fi
         fi
     fi
 
@@ -962,8 +963,8 @@ $SUMMARY_CONTENT" "NO"
                 local DUR=$(( N_SEC - DSSEC ))
                 local DR_STR="$((DUR/60))m $((DUR%60))s"
                 local D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $N_HUM\n**Outage:** $DR_STR"
-                local T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP is Online - $N_HUM - Downtime duration - $DR_STR"
-                log_msg "[SUCCESS] ${TYPE}: $NAME Online - Downtime duration $DR_STR" "UPTIME" "$N_HUM"
+                local T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP - $N_HUM - $DR_STR"
+                log_msg "[SUCCESS] ${TYPE}: $NAME Online ($DR_STR)" "UPTIME" "$N_HUM"
                 if [ "$IS_SILENT" -eq 1 ]; then
                      if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else echo "${TYPE} $NAME UP: $N_HUM (Down $DR_STR)" >> "$SILENT_BUFFER"; fi
                 else
