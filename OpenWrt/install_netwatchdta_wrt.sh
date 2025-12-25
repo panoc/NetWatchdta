@@ -108,7 +108,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.7 (Full/Fix)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.0 (Smart Defaults)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -475,27 +475,30 @@ HB_TARGET=$HB_TARGET # Target for Heartbeat: DISCORD, TELEGRAM, BOTH
 HB_START_HOUR=$HB_START_HOUR # Time of Heartbeat will start, also if 24H interval is selected time of day Heartbeat will notify. Default is 12.
 
 [Internet Connectivity]
+# SMART DEFAULT: Robust settings to prevent false alarms
 EXT_ENABLE=YES # Global toggle for internet monitoring (YES/NO). Default is YES.
 EXT_IP=1.1.1.1 # Primary external IP to monitor. Default is 1.1.1.1.
 EXT_IP2=8.8.8.8 # Secondary external IP for redundancy. Default is 8.8.8.8.
 EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
 EXT_FAIL_THRESHOLD=1 # Failed cycles before internet alert. Default is 1.
 EXT_PING_COUNT=4 # Number of packets per internet check. Default is 4.
-EXT_PING_TIMEOUT=1 # Seconds to wait for ping response. Default is 1.
+EXT_PING_TIMEOUT=5 # Seconds to wait for ping response. Default is 5.
 
 [Local Device Monitoring]
+# SMART DEFAULT: Fast settings for LAN
 DEVICE_MONITOR=YES # Enable monitoring of local IPs (YES/NO). Default is YES.
 DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
-DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
-DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
+DEV_FAIL_THRESHOLD=2 # Failed cycles before device alert. Default is 2.
+DEV_PING_COUNT=2 # Number of packets per device check. Default is 2.
 DEV_PING_TIMEOUT=1 # Seconds to wait for device ping response. Default is 1.
 
 [Remote Device Monitoring]
+# SMART DEFAULT: Robust settings for Remote/WAN
 REMOTE_MONITOR=YES # Enable monitoring of Remote IPs (YES/NO). Default is YES.
 REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
-REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
+REM_FAIL_THRESHOLD=1 # Failed cycles before remote alert. Default is 1.
 REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
-REM_PING_TIMEOUT=1 # Seconds to wait for remote ping response. Default is 1.
+REM_PING_TIMEOUT=5 # Seconds to wait for remote ping response. Default is 5.
 EOF
 
     # Generate default IP list
@@ -849,8 +852,13 @@ $SUMMARY_CONTENT" "NO"
             LAST_EXT_CHECK=$NOW_SEC
             FD="$TMP_DIR/nwdta_ext_d"; FT="$TMP_DIR/nwdta_ext_t"; FC="$TMP_DIR/nwdta_ext_c"
             EXT_UP=0
-            # FIX: No 'local' here. Use -w (deadline) logic.
+            
+            # 🛠️ FIX APPLIED: Auto-Adjust Timeout if Count > Timeout
+            # This prevents ping from dying early and causing false negatives
             EXT_TO="${EXT_PING_TIMEOUT:-1}"
+            if [ "$EXT_TO" -le "$EXT_PING_COUNT" ]; then
+                 EXT_TO=$((EXT_PING_COUNT + 1))
+            fi
             
             if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
             elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
@@ -917,6 +925,12 @@ $SUMMARY_CONTENT" "NO"
         local STRICT_TIMEOUT=1
         if [ "$TYPE" = "Device" ]; then STRICT_TIMEOUT="${DEV_PING_TIMEOUT:-1}"; fi
         if [ "$TYPE" = "Remote" ]; then STRICT_TIMEOUT="${REM_PING_TIMEOUT:-1}"; fi
+        
+        # 🛠️ FIX APPLIED: Auto-Adjust Timeout if Count > Timeout
+        local USE_TO=$STRICT_TIMEOUT
+        if [ "$USE_TO" -le "$P_COUNT" ]; then
+             USE_TO=$((P_COUNT + 1))
+        fi
 
         local SIP=$(echo "$TIP" | tr '.' '_')
         local FC="$TMP_DIR/${TYPE}_${SIP}_c"
@@ -930,7 +944,7 @@ $SUMMARY_CONTENT" "NO"
         # 1. Use -w (Deadline) for BusyBox compatibility
         # 2. Variable safety applied above prevents "ping: invalid argument" crash
         # 3. Check exit code 0 (success) vs 1 (failure)
-        if ping -q -c "$P_COUNT" -w "$STRICT_TIMEOUT" "$TIP" >/dev/null 2>&1; then
+        if ping -q -c "$P_COUNT" -w "$USE_TO" "$TIP" >/dev/null 2>&1; then
             if [ -f "$FD" ]; then
                 local DSTART; local DSSEC
                 read DSTART < "$FT"
