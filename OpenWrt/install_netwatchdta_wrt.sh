@@ -108,7 +108,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.32 (Final)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.1 (Final)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -516,7 +516,7 @@ fi
 # ==============================================================================
 echo -e "\n${CYAN}🔐 Securing credentials (OpenSSL AES-256)...${NC}"
 
-# Function: get_hw_key (FIXED: Improved AWK for different CPUINFO formats)
+# Function: get_hw_key (ROBUST FIX)
 get_hw_key() {
     local seed="nwdta_v1_secure_seed_2025"
     # Improved parsing: Splits by ':' and trims spaces to handle "Serial : XXX" vs "Serial: XXX"
@@ -540,6 +540,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl-util.${NC}"
     fi
 fi
+
 # ==============================================================================
 #  STEP 6: GENERATE CORE SCRIPT (THE ENGINE)
 # ==============================================================================
