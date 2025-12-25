@@ -114,7 +114,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.9 (Full Verbose)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.91 (Full Verbose)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -1284,8 +1284,30 @@ purge() {
 EOF
 
 chmod +x "$SERVICE_PATH"
+
+# Enable service (create symlinks)
 "$SERVICE_PATH" enable >/dev/null 2>&1
-"$SERVICE_PATH" restart >/dev/null 2>&1
+
+# Explicit START (Better than restart for fresh installs)
+"$SERVICE_PATH" start >/dev/null 2>&1
+
+# --- CRITICAL: VERIFY IF IT STARTED ---
+# Wait 2 seconds for procd to spin up the process
+sleep 2
+
+# Check if the process is actually running
+if pgrep -f "netwatchdta.sh" > /dev/null; then
+    SERVICE_STATUS="${GREEN}ACTIVE (PID: $(pgrep -f "netwatchdta.sh" | head -1))${NC}"
+else
+    # Try one more force start if it failed silently
+    "$SERVICE_PATH" start >/dev/null 2>&1
+    sleep 1
+    if pgrep -f "netwatchdta.sh" > /dev/null; then
+        SERVICE_STATUS="${GREEN}ACTIVE (Retried)${NC}"
+    else
+        SERVICE_STATUS="${RED}FAILED TO START (Check logs)${NC}"
+    fi
+fi
 
 # ==============================================================================
 #  STEP 8: FINAL SUCCESS MESSAGE (FIXED: Uses safe_fetch + Priority Curl)
@@ -1294,12 +1316,11 @@ NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 MSG="**Router:** $router_name_input\n**Time:** $NOW_FINAL\n**Status:** Service Installed & Active"
 
 if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
-    # FIXED: Replaced curl with safe_fetch
+    # We use safe_fetch but without strict exit checking for the final banner
     safe_fetch "$DISCORD_WEBHOOK" "{\"embeds\": [{\"title\": \"🚀 netwatchdta Service Started\", \"description\": \"$MSG\", \"color\": 1752220}]}" "Content-Type: application/json"
 fi
 
 if [ "$TELEGRAM_ENABLE_VAL" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-    # FIXED: Replaced curl with safe_fetch
     safe_fetch "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"🚀 netwatchdta Service Started - $router_name_input\"}" "Content-Type: application/json"
 fi
 
@@ -1309,9 +1330,11 @@ fi
 echo ""
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
-echo -e "${CYAN}📂 Folder:${NC} $INSTALL_DIR"
+echo -e "${CYAN}📂 Folder :${NC} $INSTALL_DIR"
+echo -e "${CYAN}⚙️  Service:${NC} $SERVICE_STATUS"
 echo -e "${GREEN}=======================================================${NC}"
 echo -e "\n${BOLD}Quick Commands:${NC}"
+echo -e "  Status           : ${YELLOW}/etc/init.d/netwatchdta status${NC}"
 echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
 echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
 echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
