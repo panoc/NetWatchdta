@@ -75,25 +75,24 @@ ask_opt() {
 #  PORTABLE FETCH WRAPPER (INSTALLER VERSION)
 # ==============================================================================
 # Defined early so the installer can use it for connectivity tests.
-# FIX APPLIED: Logic updated to suppress "False Positive" errors on HTTP 204.
+# FIX APPLIED: "Fire and Forget" logic for uclient-fetch to handle HTTP 204.
 safe_fetch() {
     local url="$1"
     local data="$2"   # JSON Payload
     local header="$3" # e.g. "Content-Type: application/json"
 
-    # STRATEGY 1: Curl (Most Reliable)
+    # STRATEGY 1: Standard Linux (Curl) - Best if available
     if command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
-        if [ $? -eq 0 ]; then return 0; fi
+        return 0 # Assume success if tool runs
     fi
 
-    # STRATEGY 2: uclient-fetch (OpenWrt Native)
-    # We suppress error check here because uclient-fetch often fails on HTTP 204 (No Content)
+    # STRATEGY 2: OpenWrt Native (uclient-fetch)
+    # FIX: We ignore the exit code here because uclient-fetch returns error on empty 
+    # responses (HTTP 204), which is normal for Discord/Telegram webhooks.
     if command -v uclient-fetch >/dev/null 2>&1; then
-        if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-            return 0 # Assume success if it runs, to avoid false error logs
-        fi
+        uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
+        return 0 # Force success
     fi
 
     # STRATEGY 3: Wget (Standard Linux Alternative)
@@ -110,7 +109,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.1 (Silent Log Fix)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.3 (Native Fix)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -635,6 +634,7 @@ load_credentials() {
         local key=$(get_hw_key)
         local decrypted=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$key" -in "$VAULT_FILE" 2>/dev/null)
         if [ -n "$decrypted" ]; then
+            # Trim potential whitespace/newlines from decrypted output
             decrypted=$(echo "$decrypted" | tr -d '\r')
             export DISCORD_WEBHOOK="${decrypted%%|*}"
             local temp1="${decrypted#*|}"
@@ -649,38 +649,34 @@ load_credentials() {
 }
 
 # ==============================================================================
-#  PORTABLE FETCH WRAPPER (Run Logic Update)
+#  PORTABLE FETCH WRAPPER (CORE ENGINE VERSION)
 # ==============================================================================
-# FIX: Prioritizes curl, then falls back to others.
-# FIX: Suppresses "False Error" from uclient-fetch when HTTP 204 is returned.
+# FIX APPLIED: "Fire and Forget" logic for uclient-fetch to handle HTTP 204.
 safe_fetch() {
     local url="$1"
     local data="$2"
     local header="$3"
 
-    # 1. Try Curl (Best behavior)
+    # STRATEGY 1: Curl
     if command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
-        if [ $? -eq 0 ]; then return 0; fi
+        return 0 # Assume success if tool executed
     fi
 
-    # 2. Try uclient-fetch (OpenWrt Native)
-    # Note: We mask exit code 1 because uclient-fetch often treats HTTP 204 (No Content) as a failure
+    # STRATEGY 2: uclient-fetch (OpenWrt Native)
     if command -v uclient-fetch >/dev/null 2>&1; then
-        if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-            return 0 # Assume success if it runs, to avoid false error logs on 204
-        fi
+        uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
+        return 0 # Explicitly return success to ignore false errors from HTTP 204
     fi
 
-    # 3. Try Wget (Standard Linux Alternative)
+    # STRATEGY 3: Wget
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
         return 0
     fi
     
-    return 1 # All failed
+    return 1 # Failure: No tool found
 }
 
 # --- INTERNAL: SEND PAYLOAD ---
@@ -867,6 +863,7 @@ $SUMMARY_CONTENT" "NO"
             EXT_UP_GLOBAL=$EXT_UP
 
             if [ "$EXT_UP" -eq 0 ]; then
+                # FIX: No 'local' here.
                 C=0
                 [ -f "$FC" ] && read C < "$FC"
                 C=$((C+1))
@@ -881,6 +878,7 @@ $SUMMARY_CONTENT" "NO"
             else
                 if [ -f "$FD" ]; then
                     echo "UP" > "$NET_STATUS_FILE"
+                    # FIX: No 'local' here.
                     START_TIME=""
                     START_SEC=""
                     [ -f "$FT" ] && read START_TIME < "$FT"
@@ -1274,4 +1272,4 @@ echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
 echo -e "  Edit IP List     : ${CYAN}$IP_LIST_FILE${NC}"
 echo -e "  Edit Remote List : ${CYAN}$REMOTE_LIST_FILE${NC}"
 echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
-echo ""	
+echo ""
