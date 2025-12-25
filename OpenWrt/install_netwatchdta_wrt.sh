@@ -108,7 +108,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.1 (Final)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.5 (Stable)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -234,7 +234,6 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
-
 # ==============================================================================
 #  STEP 3: CONFIGURATION INPUTS
 # ==============================================================================
@@ -431,8 +430,11 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
     echo -e " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
     echo -e " • Telegram       : ${BOLD}${WHITE}$TELEGRAM_ENABLE_VAL${NC}"
-    echo -e " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC} (Start: $user_silent_start, End: $user_silent_end)"
-    echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC} (Start Hour: $HB_START_HOUR)"
+    echo -e " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC}"
+    echo -e "     - Start      : $user_silent_start:00"
+    echo -e "     - End        : $user_silent_end:00"
+    echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC}"
+    echo -e "     - Start Hour : $HB_START_HOUR:00"
     echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
 
     # ==============================================================================
@@ -486,12 +488,14 @@ DEVICE_MONITOR=YES # Enable monitoring of local IPs (YES/NO). Default is YES.
 DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
 DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
 DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
+DEV_PING_TIMEOUT=1 # Seconds to wait for device ping response. Default is 1.
 
 [Remote Device Monitoring]
 REMOTE_MONITOR=YES # Enable monitoring of Remote IPs (YES/NO). Default is YES.
 REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
 REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
 REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
+REM_PING_TIMEOUT=1 # Seconds to wait for remote ping response. Default is 1.
 EOF
 
     # Generate default IP list
@@ -540,7 +544,6 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl-util.${NC}"
     fi
 fi
-
 # ==============================================================================
 #  STEP 6: GENERATE CORE SCRIPT (THE ENGINE)
 # ==============================================================================
@@ -790,6 +793,8 @@ while true; do
     CUR_HOUR=$(date +%H)
     CUR_FREE_RAM=$(df /tmp | awk 'NR==2 {print $4}')
     CPU_LOAD=$(cat /proc/loadavg | awk '{print $1}')
+    # FIX: Safety default for CPU_LOAD
+    CPU_LOAD=${CPU_LOAD:-0.00}
     
     if awk "BEGIN {exit !($CPU_LOAD > $CPU_GUARD_THRESHOLD)}"; then
         log_msg "[SYSTEM] High Load ($CPU_LOAD). Skipping." "UPTIME" "$NOW_HUMAN"
@@ -843,8 +848,10 @@ $SUMMARY_CONTENT" "NO"
             LAST_EXT_CHECK=$NOW_SEC
             FD="$TMP_DIR/nwdta_ext_d"; FT="$TMP_DIR/nwdta_ext_t"; FC="$TMP_DIR/nwdta_ext_c"
             EXT_UP=0
-            if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
-            elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
+            # FIX: Use -w (Deadline) and ensure variable safety
+            local EXT_TO="${EXT_PING_TIMEOUT:-1}"
+            if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
+            elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
             EXT_UP_GLOBAL=$EXT_UP
 
             if [ "$EXT_UP" -eq 0 ]; then
@@ -889,12 +896,23 @@ $SUMMARY_CONTENT" "NO"
 
     # --- SHARED CHECK FUNCTION ---
     check_ip_logic() {
-        local TIP=$1; local NAME=$2; local TYPE=$3; local THRESH=$4; local P_COUNT=$5
-        local N_SEC=$6; local N_HUM=$7
+        local TIP="$1"
+        local NAME="$2"
+        local TYPE="$3"
+        # FIX: Added defaults prevents crash if config is missing (e.g. Upgrade)
+        local THRESH="${4:-3}"
+        local P_COUNT="${5:-1}"
+        local N_SEC="$6"
+        local N_HUM="$7"
         
         # FIX: Ensure we didn't pick up hidden chars in args
         TIP=$(echo "$TIP" | tr -d '\r')
         NAME=$(echo "$NAME" | tr -d '\r')
+
+        # NEW TIMEOUT LOGIC (Safe Default 1s if variable missing)
+        local STRICT_TIMEOUT=1
+        if [ "$TYPE" = "Device" ]; then STRICT_TIMEOUT="${DEV_PING_TIMEOUT:-1}"; fi
+        if [ "$TYPE" = "Remote" ]; then STRICT_TIMEOUT="${REM_PING_TIMEOUT:-1}"; fi
 
         local SIP=$(echo "$TIP" | tr '.' '_')
         local FC="$TMP_DIR/${TYPE}_${SIP}_c"
@@ -904,7 +922,10 @@ $SUMMARY_CONTENT" "NO"
         if [ "$TYPE" = "Device" ]; then M_FLAG="$DISCORD_MENTION_LOCAL"; fi
         if [ "$TYPE" = "Remote" ]; then M_FLAG="$DISCORD_MENTION_REMOTE"; fi
         
-        if ping -q -c "$P_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
+        # PING FIX:
+        # 1. Use -w (Deadline) for BusyBox compatibility
+        # 2. Variable safety applied above prevents "ping: invalid argument" crash
+        if ping -q -c "$P_COUNT" -w "$STRICT_TIMEOUT" "$TIP" >/dev/null 2>&1; then
             if [ -f "$FD" ]; then
                 local DSTART; local DSSEC
                 read DSTART < "$FT"
@@ -1004,7 +1025,6 @@ $SUMMARY_CONTENT" "NO"
 done
 EOF
 chmod +x "$INSTALL_DIR/netwatchdta.sh"
-
 # ==============================================================================
 #  STEP 7: SERVICE CONFIGURATION (INIT.D)
 # ==============================================================================
