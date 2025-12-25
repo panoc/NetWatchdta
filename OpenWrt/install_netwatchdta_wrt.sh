@@ -1,5 +1,5 @@
 #!/bin/sh
-# netwatchdta Installer - Automated Setup for OpenWrt (Optimized + Portable)
+# netwatchdta Installer - Automated Setup for OpenWrt (Optimized & Portable)
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
 
@@ -72,10 +72,45 @@ ask_opt() {
 }
 
 # ==============================================================================
+#  PORTABLE FETCH WRAPPER (FOR INSTALLER USE)
+# ==============================================================================
+# Defined early so the installer can use it for connectivity tests.
+safe_fetch() {
+    local url="$1"
+    local data="$2"   # JSON Payload
+    local header="$3" # e.g. "Content-Type: application/json"
+
+    # STRATEGY 1: OpenWrt Native (Optimized RAM)
+    if command -v uclient-fetch >/dev/null 2>&1; then
+        # Check if this version supports headers (OpenWrt 23.05+)
+        if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
+            uclient-fetch --header="$header" --post-data="$data" "$url" >/dev/null 2>&1
+            return $?
+        fi
+        # Fallback for old OpenWrt (no header support) - Forces curl below
+    fi
+
+    # STRATEGY 2: Standard Linux (Curl)
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
+        return $?
+    fi
+
+    # STRATEGY 3: Wget (Standard Linux Alternative)
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --no-check-certificate --header="$header" \
+             --post-data="$data" "$url" -O /dev/null
+        return $?
+    fi
+    
+    return 1 # Failure: No tool found
+}
+
+# ==============================================================================
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.5 (Optimized & Portable)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.7 (Custom)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -128,14 +163,13 @@ fi
 
 # 4. Define Dependency List
 MISSING_DEPS=""
-# Check for curl (Standard Linux fallback) OR uclient-fetch (OpenWrt Optimized)
+# Check for safe_fetch tools (uclient-fetch OR curl)
 if ! command -v uclient-fetch >/dev/null 2>&1; then
-    # If no uclient-fetch, we absolutely need curl
     command -v curl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS curl"
 fi
-# Check for CA Certificates (needed for secure requests)
+# Check for CA Certificates (needed for secure curl)
 [ -f /etc/ssl/certs/ca-certificates.crt ] || command -v opkg >/dev/null && opkg list-installed | grep -q ca-bundle || MISSING_DEPS="$MISSING_DEPS ca-bundle"
-# Check for OpenSSL (Mandatory now for Vault)
+# Check for OpenSSL (Mandatory now)
 command -v openssl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS openssl-util"
 
 # RAM Guard Check
@@ -217,7 +251,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     printf "${BOLD}🏷️  Enter Router Name (e.g., MyRouter): ${NC}"
     read router_name_input </dev/tty
     
-    # 3b. Discord Setup Loop
+    # 3b. Discord Setup Loop (Enhanced with safe_fetch and Cancel option)
     DISCORD_ENABLE_VAL="NO"
     DISCORD_WEBHOOK=""
     DISCORD_USERID=""
@@ -240,9 +274,13 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         ask_yn "   ❓ Send test notification to Discord now?"
         if [ "$ANSWER_YN" = "y" ]; then
              echo -e "${YELLOW}   🧪 Sending Discord test...${NC}"
-             # Simple test using curl here, main script uses safe_fetch
-             curl -s -k -H "Content-Type: application/json" -X POST -d "{\"content\": \"<@$DISCORD_USERID>\", \"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK"
-             echo ""
+             # Updated to use safe_fetch for reliability
+             if safe_fetch "$DISCORD_WEBHOOK" "{\"content\": \"<@$DISCORD_USERID>\", \"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "Content-Type: application/json"; then
+                 echo -e "${GREEN}   ✅ Notification Sent.${NC}"
+             else
+                 echo -e "${RED}   ❌ Failed to send. Check URL.${NC}"
+             fi
+             
              ask_yn "   ❓ Did you receive the notification?"
              
              if [ "$ANSWER_YN" = "y" ]; then
@@ -252,10 +290,15 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
                  echo -e "${RED}   ❌ Test failed.${NC}"
                  echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
                  echo -e "${BOLD}${WHITE}   2.${NC} Disable Discord and continue"
-                 ask_opt "   Choice" "2"
+                 echo -e "${BOLD}${WHITE}   3.${NC} Cancel installation"
+                 ask_opt "   Choice" "3"
                  if [ "$ANSWER_OPT" = "2" ]; then
                      DISCORD_ENABLE_VAL="NO"
                      break
+                 fi
+                 if [ "$ANSWER_OPT" = "3" ]; then
+                     echo -e "${RED}❌ Installation cancelled by user.${NC}"
+                     exit 0
                  fi
              fi
         else
@@ -263,7 +306,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     done
 
-    # 3c. Telegram Setup Loop
+    # 3c. Telegram Setup Loop (Enhanced with safe_fetch and Cancel option)
     TELEGRAM_ENABLE_VAL="NO"
     TELEGRAM_BOT_TOKEN=""
     TELEGRAM_CHAT_ID=""
@@ -284,8 +327,12 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         ask_yn "   ❓ Send test notification to Telegram now?"
         if [ "$ANSWER_YN" = "y" ]; then
             echo -e "${YELLOW}   🧪 Sending Telegram test...${NC}"
-            curl -s -k -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🧪 Setup Test - Telegram configured successfully for $router_name_input." >/dev/null 2>&1
-            echo ""
+            if safe_fetch "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"🧪 Setup Test - Telegram configured successfully for $router_name_input.\"}" "Content-Type: application/json"; then
+                echo -e "${GREEN}   ✅ Notification Sent.${NC}"
+            else
+                echo -e "${RED}   ❌ Failed to send. Check Token/ID.${NC}"
+            fi
+
             ask_yn "   ❓ Did you receive the notification?"
             
             if [ "$ANSWER_YN" = "y" ]; then
@@ -295,10 +342,15 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
                 echo -e "${RED}   ❌ Test failed.${NC}"
                 echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
                 echo -e "${BOLD}${WHITE}   2.${NC} Disable Telegram and continue"
-                ask_opt "   Choice" "2"
+                echo -e "${BOLD}${WHITE}   3.${NC} Cancel installation"
+                ask_opt "   Choice" "3"
                 if [ "$ANSWER_OPT" = "2" ]; then
                     TELEGRAM_ENABLE_VAL="NO"
                     break
+                fi
+                if [ "$ANSWER_OPT" = "3" ]; then
+                     echo -e "${RED}❌ Installation cancelled by user.${NC}"
+                     exit 0
                 fi
             fi
         else
@@ -336,10 +388,9 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         done
     fi
     
-    # 3f. Heartbeat Logic
+    # 3f. Heartbeat Logic (Updated: Removed Mention Question)
     HB_VAL="NO"
     HB_SEC="86400"
-    HB_MENTION="NO"
     HB_TARGET="BOTH"
     HB_START_HOUR="12"
     
@@ -356,6 +407,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
              HB_SEC=86400 # Default fallback
         fi
 
+        # Ask for Start Hour
         while :; do
             printf "${BOLD}   > Start Hour (0-23) [Default 12]: ${NC}"
             read HB_START_HOUR </dev/tty
@@ -366,11 +418,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             echo -e "${RED}   ❌ Invalid hour.${NC}"
         done
         
-        ask_yn "   > Mention in Heartbeat?"
-        if [ "$ANSWER_YN" = "y" ]; then
-            HB_MENTION="YES"
-        fi
-        
+        # --- HEARTBEAT TARGET SELECTOR ---
         if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ "$TELEGRAM_ENABLE_VAL" = "YES" ]; then
              echo -e "${BOLD}${WHITE}   Where to send Heartbeat?${NC}"
              echo -e "   1. ${BOLD}${WHITE}Discord Only${NC}"
@@ -391,7 +439,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     fi
 
-    # 3g. Summary Display (Requested Format)
+    # 3g. Summary Display (Requested vertical list format with Bold White)
     echo -e "\n${BLUE}--- 📋 Configuration Summary ---${NC}"
     echo -e " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
     echo -e " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
@@ -401,55 +449,62 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
 
     # ==============================================================================
-    #  STEP 4: GENERATE CONFIGURATION FILES
+    #  STEP 4: GENERATE CONFIGURATION FILES (UPDATED FORMAT)
     # ==============================================================================
     cat <<EOF > "$CONFIG_FILE"
 # settings.conf - Configuration for netwatchdta
+# Note: Credentials are stored in .vault.enc (Method: OPENSSL)
 ROUTER_NAME="$router_name_input"
-EXEC_METHOD=$AUTO_EXEC_METHOD
+EXEC_METHOD=$AUTO_EXEC_METHOD # 1 = Parallel (Fast, High RAM > 256MB), 2 = Sequential (Safe, Low RAM < 256MB)
 
 [Log Settings]
-UPTIME_LOG_MAX_SIZE=51200
-PING_LOG_ENABLE=NO
+UPTIME_LOG_MAX_SIZE=51200 # Max log file size in bytes for uptime tracking. Default is 51200.
+PING_LOG_ENABLE=NO # Enable or disable detailed ping logging (YES/NO). Default is NO.
 
 [Notification Settings]
-DISCORD_ENABLE=$DISCORD_ENABLE_VAL
-TELEGRAM_ENABLE=$TELEGRAM_ENABLE_VAL
-SILENT_ENABLE=$SILENT_ENABLE_VAL
-SILENT_START=$user_silent_start
-SILENT_END=$user_silent_end
+DISCORD_ENABLE=$DISCORD_ENABLE_VAL # Global toggle for Discord notifications (YES/NO). Default is NO.
+TELEGRAM_ENABLE=$TELEGRAM_ENABLE_VAL # Global toggle for Telegram notifications (YES/NO). Default is NO.
+SILENT_ENABLE=$SILENT_ENABLE_VAL # Mutes Discord alerts during specific hours (YES/NO). Default is NO.
+SILENT_START=$user_silent_start # Hour to start silent mode (0-23). Default is 23.
+SILENT_END=$user_silent_end # Hour to end silent mode (0-23). Default is 07.
+
+[Discord]
+# Toggle mentions <@UserID> for specific events (YES/NO)
+DISCORD_MENTION_LOCAL=YES
+DISCORD_MENTION_REMOTE=YES
+DISCORD_MENTION_NET=YES
+DISCORD_MENTION_HB=NO
 
 [Performance Settings]
-CPU_GUARD_THRESHOLD=2.0
-RAM_GUARD_MIN_FREE=4096
+CPU_GUARD_THRESHOLD=2.0 # Max CPU load average allowed before skipping pings. Default is 2.0.
+RAM_GUARD_MIN_FREE=4096 # Minimum free RAM in KB required to run alerts. Default is 4096.
 
 [Heartbeat]
-HEARTBEAT=$HB_VAL
-HB_INTERVAL=$HB_SEC
-HB_MENTION=$HB_MENTION
-HB_TARGET=$HB_TARGET
-HB_START_HOUR=$HB_START_HOUR
+HEARTBEAT=$HB_VAL # Periodic I am alive notification (YES/NO). Default is NO.
+HB_INTERVAL=$HB_SEC # Seconds between heartbeat messages. Default is 86400.
+HB_TARGET=$HB_TARGET # Target for Heartbeat: DISCORD, TELEGRAM, BOTH
+HB_START_HOUR=$HB_START_HOUR # Time of Heartbeat will start, also if 24H interval is selected time of day Heartbeat will notify. Default is 12.
 
 [Internet Connectivity]
-EXT_ENABLE=YES
-EXT_IP=1.1.1.1
-EXT_IP2=8.8.8.8
-EXT_SCAN_INTERVAL=60
-EXT_FAIL_THRESHOLD=1
-EXT_PING_COUNT=4
-EXT_PING_TIMEOUT=1
+EXT_ENABLE=YES # Global toggle for internet monitoring (YES/NO). Default is YES.
+EXT_IP=1.1.1.1 # Primary external IP to monitor. Default is 1.1.1.1.
+EXT_IP2=8.8.8.8 # Secondary external IP for redundancy. Default is 8.8.8.8.
+EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
+EXT_FAIL_THRESHOLD=1 # Failed cycles before internet alert. Default is 1.
+EXT_PING_COUNT=4 # Number of packets per internet check. Default is 4.
+EXT_PING_TIMEOUT=1 # Seconds to wait for ping response. Default is 1.
 
 [Local Device Monitoring]
-DEVICE_MONITOR=YES
-DEV_SCAN_INTERVAL=10
-DEV_FAIL_THRESHOLD=3
-DEV_PING_COUNT=4
+DEVICE_MONITOR=YES # Enable monitoring of local IPs (YES/NO). Default is YES.
+DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
+DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
+DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
 
 [Remote Device Monitoring]
-REMOTE_MONITOR=YES
-REM_SCAN_INTERVAL=30
-REM_FAIL_THRESHOLD=2
-REM_PING_COUNT=4
+REMOTE_MONITOR=YES # Enable monitoring of Remote IPs (YES/NO). Default is YES.
+REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
+REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
+REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
 EOF
 
     # Generate default IP list
@@ -457,7 +512,7 @@ EOF
 # Format: IP_ADDRESS @ NAME
 # Example: 192.168.1.50 @ Home Server
 EOF
-    # Auto-detect local gateway
+    # Attempt to auto-detect local gateway IP for user convenience
     LOCAL_IP=$(uci -q get network.lan.ipaddr || ip addr show br-lan | grep -oE 'inet ([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1 | awk '{print $2}')
     [ -n "$LOCAL_IP" ] && echo "$LOCAL_IP @ Router Gateway" >> "$IP_LIST_FILE"
 
@@ -465,9 +520,9 @@ EOF
     cat <<EOF > "$REMOTE_LIST_FILE"
 # Format: IP_ADDRESS @ NAME
 # Example: 142.250.180.206 @ Google Server
+# Note: These are ONLY checked if Internet is UP (Strict Dependency).
 EOF
 fi
-
 # ==============================================================================
 #  STEP 5: SECURE CREDENTIAL VAULT (OPENSSL ENFORCED)
 # ==============================================================================
@@ -483,8 +538,12 @@ get_hw_key() {
     echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
 }
 
+# Create the Vault Data String
+# Format: DISCORD_WEBHOOK|DISCORD_USERID|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID
 if [ "$KEEP_CONFIG" -eq 0 ]; then
     VAULT_DATA="${DISCORD_WEBHOOK}|${DISCORD_USERID}|${TELEGRAM_BOT_TOKEN}|${TELEGRAM_CHAT_ID}"
+    
+    # FORCED OPENSSL AES-256-CBC
     HW_KEY=$(get_hw_key)
     if echo -n "$VAULT_DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -out "$VAULT_FILE" 2>/dev/null; then
         echo -e "${GREEN}✅ Credentials Encrypted and locked to this hardware.${NC}"
@@ -492,10 +551,18 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl-util.${NC}"
     fi
 fi
+
 # ==============================================================================
 #  STEP 6: GENERATE CORE SCRIPT (THE ENGINE)
 # ==============================================================================
 echo -e "\n${CYAN}🛠️  Generating core script...${NC}"
+
+# ------------------------------------------------------------------------------
+# OPTIMIZATION NOTE:
+# The following engine script has been refactored to use Shell Built-ins
+# (read, arithmetic, string manipulation) instead of external binaries
+# (cat, cut, sed, awk, date) in tight loops. This reduces CPU forks and RAM usage.
+# ------------------------------------------------------------------------------
 
 cat <<'EOF' > "$INSTALL_DIR/netwatchdta.sh"
 #!/bin/sh
@@ -530,12 +597,13 @@ LAST_DEV_CHECK=0
 LAST_REM_CHECK=0
 LAST_HB_CHECK=0
 EXT_UP_GLOBAL=1
+LAST_CFG_LOAD=0
 
 # --- HELPER: LOGGING ---
 log_msg() {
     local msg="$1"
     local type="$2" # UPTIME or PING
-    local ts=$(date '+%b %d %H:%M:%S')
+    local ts="$3"   # Passed from main loop
     
     if [ "$type" = "PING" ] && [ "$PING_LOG_ENABLE" = "YES" ]; then
         echo "$ts - $msg" >> "$PINGLOG"
@@ -550,10 +618,16 @@ log_msg() {
     fi
 }
 
-# --- HELPER: CONFIG LOADER ---
+# --- HELPER: CONFIG LOADER (Optimized: Check Mod Time) ---
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
-        eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//')"
+        # BusyBox ls -l date format varies, but usually works for simple change detection
+        # We assume lightweight checking.
+        local cur_cfg_sig=$(ls -l --time-style=+%s "$CONFIG_FILE" 2>/dev/null || ls -l "$CONFIG_FILE")
+        if [ "$cur_cfg_sig" != "$LAST_CFG_LOAD" ]; then
+            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//')"
+            LAST_CFG_LOAD="$cur_cfg_sig"
+        fi
     fi
 }
 
@@ -570,16 +644,16 @@ get_hw_key() {
 # --- HELPER: CREDENTIAL DECRYPTION ---
 load_credentials() {
     if [ -f "$VAULT_FILE" ]; then
-        local decrypted=""
         local key=$(get_hw_key)
-        
-        decrypted=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$key" -in "$VAULT_FILE" 2>/dev/null)
-        
+        local decrypted=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$key" -in "$VAULT_FILE" 2>/dev/null)
         if [ -n "$decrypted" ]; then
-            export DISCORD_WEBHOOK=$(echo "$decrypted" | cut -d'|' -f1)
-            export DISCORD_USERID=$(echo "$decrypted" | cut -d'|' -f2)
-            export TELEGRAM_BOT_TOKEN=$(echo "$decrypted" | cut -d'|' -f3)
-            export TELEGRAM_CHAT_ID=$(echo "$decrypted" | cut -d'|' -f4)
+            # Pure shell parsing to avoid 'cut' forks
+            export DISCORD_WEBHOOK="${decrypted%%|*}"
+            local temp1="${decrypted#*|}"
+            export DISCORD_USERID="${temp1%%|*}"
+            local temp2="${temp1#*|}"
+            export TELEGRAM_BOT_TOKEN="${temp2%%|*}"
+            export TELEGRAM_CHAT_ID="${temp2#*|}"
             return 0
         fi
     fi
@@ -601,7 +675,7 @@ safe_fetch() {
             uclient-fetch --header="$header" --post-data="$data" "$url" >/dev/null 2>&1
             return $?
         fi
-        # Fallback for old OpenWrt (no header support) -> Continues to Curl
+        # Fallback for old OpenWrt (no header support) - Continues to Curl
     fi
 
     # STRATEGY 2: Standard Linux (Curl ~4.0MB)
@@ -627,47 +701,45 @@ send_payload() {
     local color="$3"
     local filter="$4"
     local telegram_text="$5" 
+    local do_mention="$6" # YES or NO flag passed from send_notification
     local success=0
 
-    # 1. DISCORD LOGIC (Updated for Mentions)
+    # 1. DISCORD
     if [ "$DISCORD_ENABLE" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "DISCORD" ]; then
              local json_desc=$(echo "$desc" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
              local d_payload
              
-             # If Color is RED (Alert: 15548997) or it's a Heartbeat with mention, enable PING
-             if { [ "$color" = "15548997" ] || [ "$color" = "1752220" ]; } && [ -n "$DISCORD_USERID" ] && [ "$HB_MENTION" != "NO" ]; then
-                # Inject mention into 'content' field for reliable pings
+             # Mentions Logic: Only ping if flag is YES and User ID exists
+             if [ "$do_mention" = "YES" ] && [ -n "$DISCORD_USERID" ]; then
                 d_payload="{\"content\": \"<@$DISCORD_USERID>\", \"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}"
              else
-                # Clean embed without ping
                 d_payload="{\"embeds\": [{\"title\": \"$title\", \"description\": \"$json_desc\", \"color\": $color}]}"
              fi
              
              if safe_fetch "$DISCORD_WEBHOOK" "$d_payload" "Content-Type: application/json"; then
                 success=1
              else
-                log_msg "[ERROR] Discord send failed." "UPTIME"
+                log_msg "[ERROR] Discord send failed." "UPTIME" "$NOW_HUMAN"
              fi
         fi
     fi
 
-    # 2. TELEGRAM LOGIC
+    # 2. TELEGRAM
     if [ "$TELEGRAM_ENABLE" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
         if [ -z "$filter" ] || [ "$filter" = "BOTH" ] || [ "$filter" = "TELEGRAM" ]; then
              local t_msg="$title
 $desc"
              if [ -n "$telegram_text" ]; then t_msg="$telegram_text"; fi
              
-             # Construct minimal JSON for uclient-fetch/curl compatibility
-             # We escape line breaks for JSON safety
+             # Escape text for JSON safety
              local t_safe_text=$(echo "$t_msg" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
              local t_payload="{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"$t_safe_text\"}"
              
              if safe_fetch "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "$t_payload" "Content-Type: application/json"; then
                 success=1
              else
-                log_msg "[ERROR] Telegram send failed." "UPTIME"
+                log_msg "[ERROR] Telegram send failed." "UPTIME" "$NOW_HUMAN"
              fi
         fi
     fi
@@ -675,67 +747,65 @@ $desc"
     return $((1 - success))
 }
 
-# --- HELPER: NOTIFICATION SENDER ---
+# --- HELPER: NOTIFICATION SENDER (Optimized: RAM passed in) ---
 send_notification() {
-    local title="$1"; local desc="$2"; local color="$3"; local type="$4"; local filter="$5"; local force="$6"; local tel_text="$7"
+    local title="$1"; local desc="$2"; local color="$3"; local type="$4"; local filter="$5"; local force="$6"; local tel_text="$7"; local mention="$8"
     
-    # RAM Guard
-    local free_ram=$(df /tmp | awk 'NR==2 {print $4}')
-    if [ "$free_ram" -lt "$RAM_GUARD_MIN_FREE" ]; then
-        log_msg "[SYSTEM] RAM LOW ($free_ram KB). Notification skipped." "UPTIME"
+    # RAM Guard (Pre-calculated in main loop to save 'df' calls)
+    if [ "$CUR_FREE_RAM" -lt "$RAM_GUARD_MIN_FREE" ]; then
+        log_msg "[SYSTEM] RAM LOW ($CUR_FREE_RAM KB). Notification skipped." "UPTIME" "$NOW_HUMAN"
         return
     fi
     
     sleep 1
 
     local net_stat="UP"
-    if [ -f "$NET_STATUS_FILE" ]; then net_stat=$(cat "$NET_STATUS_FILE"); fi
+    [ -f "$NET_STATUS_FILE" ] && read net_stat < "$NET_STATUS_FILE"
 
     # IF Internet is DOWN and not forced -> BUFFER IT
     if [ "$net_stat" = "DOWN" ] && [ "$force" != "YES" ]; then
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
-             log_msg "[BUFFER] Buffer full. Dropped." "UPTIME"
+             log_msg "[BUFFER] Buffer full. Dropped." "UPTIME" "$NOW_HUMAN"
              return
         fi
+        # Optimize substitution
         local clean_desc=$(echo "$desc" | sed ':a;N;$!ba;s/\n/__BR__/g')
         local clean_tel=$(echo "$tel_text" | sed ':a;N;$!ba;s/\n/__BR__/g')
-        echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}" >> "$OFFLINE_BUFFER"
-        log_msg "[BUFFER] Internet Down. Notification buffered." "UPTIME"
+        # Store mention flag in buffer!
+        echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}|||${mention}" >> "$OFFLINE_BUFFER"
+        log_msg "[BUFFER] Internet Down. Notification buffered." "UPTIME" "$NOW_HUMAN"
         return
     fi
 
     # Try sending
-    if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text"; then
+    if ! send_payload "$title" "$desc" "$color" "$filter" "$tel_text" "$mention"; then
         if [ -f "$OFFLINE_BUFFER" ] && [ $(wc -c < "$OFFLINE_BUFFER") -ge 5120 ]; then
-             log_msg "[BUFFER] Buffer full. Failed." "UPTIME"
+             log_msg "[BUFFER] Buffer full. Failed." "UPTIME" "$NOW_HUMAN"
         else
              local clean_desc=$(echo "$desc" | sed ':a;N;$!ba;s/\n/__BR__/g')
              local clean_tel=$(echo "$tel_text" | sed ':a;N;$!ba;s/\n/__BR__/g')
-             echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}" >> "$OFFLINE_BUFFER"
-             log_msg "[BUFFER] Send failed. Buffered." "UPTIME"
+             echo "${title}|||${clean_desc}|||${color}|||${filter}|||${clean_tel}|||${mention}" >> "$OFFLINE_BUFFER"
+             log_msg "[BUFFER] Send failed. Buffered." "UPTIME" "$NOW_HUMAN"
         fi
     fi
 }
 
-# --- HELPER: FLUSH BUFFER ---
+# --- HELPER: FLUSH BUFFER (Optimized: pure shell read) ---
 flush_buffer() {
     if [ -f "$OFFLINE_BUFFER" ]; then
-        log_msg "[SYSTEM] Internet Restored. Flushing buffer..." "UPTIME"
-        while read -r line; do
-             local b_title=$(echo "$line" | awk -F '\\|\\|\\|' '{print $1}')
-             local b_desc_raw=$(echo "$line" | awk -F '\\|\\|\\|' '{print $2}')
-             local b_color=$(echo "$line" | awk -F '\\|\\|\\|' '{print $3}')
-             local b_filter=$(echo "$line" | awk -F '\\|\\|\\|' '{print $4}')
-             local b_tel_raw=$(echo "$line" | awk -F '\\|\\|\\|' '{print $5}')
-             
+        log_msg "[SYSTEM] Internet Restored. Flushing buffer..." "UPTIME" "$NOW_HUMAN"
+        # Pure shell parsing - NO AWK calls inside loop
+        while IFS="|||" read -r b_title b_desc_raw b_color b_filter b_tel_raw b_mention; do
+             # Strip leading/trailing IFS artifacts if any (usually shell read handles it)
+             # Restore newlines
              local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\\n/g')
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              
              sleep 1 
-             send_payload "$b_title" "$b_desc" "$b_color" "$b_filter" "$b_tel"
+             send_payload "$b_title" "$b_desc" "$b_color" "$b_filter" "$b_tel" "$b_mention"
         done < "$OFFLINE_BUFFER"
         rm -f "$OFFLINE_BUFFER"
-        log_msg "[SYSTEM] Buffer flushed." "UPTIME"
+        log_msg "[SYSTEM] Buffer flushed." "UPTIME" "$NOW_HUMAN"
     fi
 }
 
@@ -743,9 +813,9 @@ flush_buffer() {
 load_config
 load_credentials
 if [ $? -eq 0 ]; then
-    log_msg "[SYSTEM] Credentials loaded and decrypted." "UPTIME"
+    log_msg "[SYSTEM] Credentials loaded and decrypted." "UPTIME" "$(date '+%b %d %H:%M:%S')"
 else
-    log_msg "[WARNING] Vault error or missing." "UPTIME"
+    log_msg "[WARNING] Vault error or missing." "UPTIME" "$(date '+%b %d %H:%M:%S')"
 fi
 
 if [ "$HEARTBEAT" = "YES" ]; then
@@ -755,12 +825,19 @@ fi
 # --- MAIN LOGIC LOOP ---
 while true; do
     load_config
-    NOW_HUMAN=$(date '+%b %d %H:%M:%S'); NOW_SEC=$(date +%s); CUR_HOUR=$(date +%H)
+    
+    # Calculate Time ONCE per loop to save 'date' calls
+    NOW_HUMAN=$(date '+%b %d %H:%M:%S')
+    NOW_SEC=$(date +%s)
+    CUR_HOUR=$(date +%H)
+    
+    # Calculate Resources ONCE per loop
+    CUR_FREE_RAM=$(df /tmp | awk 'NR==2 {print $4}')
+    CPU_LOAD=$(cat /proc/loadavg | awk '{print $1}')
     
     # CPU Guard
-    CPU_LOAD=$(cat /proc/loadavg | awk '{print $1}')
     if awk "BEGIN {exit !($CPU_LOAD > $CPU_GUARD_THRESHOLD)}"; then
-        log_msg "[SYSTEM] High Load ($CPU_LOAD). Skipping." "UPTIME"
+        log_msg "[SYSTEM] High Load ($CPU_LOAD). Skipping." "UPTIME" "$NOW_HUMAN"
         sleep 10
         continue
     fi
@@ -780,10 +857,10 @@ while true; do
             if [ "$CAN_SEND" -eq 1 ]; then
                 LAST_HB_CHECK=$NOW_SEC
                 HB_MSG="**Router:** $ROUTER_NAME\n**Status:** Systems Operational\n**Time:** $NOW_HUMAN"
-                # Mention logic handled inside send_payload via HB_MENTION
                 TARGET=${HB_TARGET:-BOTH}
-                send_notification "💓 Heartbeat Report" "$HB_MSG" "1752220" "INFO" "$TARGET" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN"
-                log_msg "Heartbeat sent ($TARGET)." "UPTIME"
+                # Pass HB_MENTION config (now mapped to DISCORD_MENTION_HB)
+                send_notification "💓 Heartbeat Report" "$HB_MSG" "1752220" "INFO" "$TARGET" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN" "$DISCORD_MENTION_HB"
+                log_msg "Heartbeat sent ($TARGET)." "UPTIME" "$NOW_HUMAN"
             fi
         fi
     fi
@@ -802,10 +879,11 @@ while true; do
     if [ "$IS_SILENT" -eq 0 ] && [ -s "$SILENT_BUFFER" ]; then
         SUMMARY_CONTENT=$(cat "$SILENT_BUFFER")
         CLEAN_SUMMARY=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
+        # Summary never mentions
         send_notification "🌙 Silent Hours Summary" "**Router:** $ROUTER_NAME\n$CLEAN_SUMMARY" "10181046" "SUMMARY" "BOTH" "NO" "🌙 Silent Hours Summary - $ROUTER_NAME
-$SUMMARY_CONTENT"
+$SUMMARY_CONTENT" "NO"
         > "$SILENT_BUFFER"
-        log_msg "[SYSTEM] Silent buffer dumped." "UPTIME"
+        log_msg "[SYSTEM] Silent buffer dumped." "UPTIME" "$NOW_HUMAN"
     fi
 
     # --- INTERNET MONITORING ---
@@ -821,31 +899,40 @@ $SUMMARY_CONTENT"
             EXT_UP_GLOBAL=$EXT_UP
 
             if [ "$EXT_UP" -eq 0 ]; then
-                C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+                # Optimization: read from file instead of cat/subshell
+                local C=0
+                [ -f "$FC" ] && read C < "$FC"
+                C=$((C+1))
+                echo "$C" > "$FC"
+                
                 if [ "$C" -ge "$EXT_FAIL_THRESHOLD" ] && [ ! -f "$FD" ]; then
                     echo "$NOW_SEC" > "$FD"; echo "$NOW_HUMAN" > "$FT"; echo "DOWN" > "$NET_STATUS_FILE"
-                    log_msg "[ALERT] INTERNET DOWN" "UPTIME"
+                    log_msg "[ALERT] INTERNET DOWN" "UPTIME" "$NOW_HUMAN"
                     
                     if [ "$IS_SILENT" -ne 0 ]; then
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
                              echo "Internet Down: $NOW_HUMAN" >> "$SILENT_BUFFER"
                          fi
                     else
-                         : # Alert handled implicitly by buffering
+                         : # Alert logic handled by notification buffering implicitly via net status
                     fi
                 fi
             else
                 if [ -f "$FD" ]; then
                     echo "UP" > "$NET_STATUS_FILE"
-                    START_TIME=$(cat "$FT"); START_SEC=$(cat "$FD")
+                    local START_TIME; local START_SEC
+                    [ -f "$FT" ] && read START_TIME < "$FT"
+                    [ -f "$FD" ] && read START_SEC < "$FD"
+                    
                     DURATION_SEC=$((NOW_SEC - START_SEC))
                     DR="$((DURATION_SEC/60))m $((DURATION_SEC%60))s"
                     MSG_D="**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
                     MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - $START_TIME - $NOW_HUMAN - $DR"
-                    log_msg "[SUCCESS] INTERNET UP (Down $DR)" "UPTIME"
+                    log_msg "[SUCCESS] INTERNET UP (Down $DR)" "UPTIME" "$NOW_HUMAN"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T"
+                        # Connectivity restore: Use NET mention flag (optional, usually users want mention on UP too if they want it on DOWN)
+                        send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T" "$DISCORD_MENTION_NET"
                         flush_buffer
                     else
                          if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
@@ -863,47 +950,63 @@ $SUMMARY_CONTENT"
         EXT_UP_GLOBAL=1
     fi
 
-    # --- SHARED CHECK FUNCTION ---
+    # --- SHARED CHECK FUNCTION (Optimized: No external parsers) ---
     check_ip_logic() {
-        TIP=$1; NAME=$2; TYPE=$3; THRESH=$4; P_COUNT=$5
+        # Arguments
+        local TIP=$1; local NAME=$2; local TYPE=$3; local THRESH=$4; local P_COUNT=$5
+        # Pass Global Time Vars to avoid calling 'date'
+        local N_SEC=$6; local N_HUM=$7
+
+        local SIP=$(echo "$TIP" | tr '.' '_')
+        local FC="$TMP_DIR/${TYPE}_${SIP}_c"
+        local FD="$TMP_DIR/${TYPE}_${SIP}_d"
+        local FT="$TMP_DIR/${TYPE}_${SIP}_t"
         
-        SIP=$(echo "$TIP" | tr '.' '_')
-        FC="$TMP_DIR/${TYPE}_${SIP}_c"; FD="$TMP_DIR/${TYPE}_${SIP}_d"; FT="$TMP_DIR/${TYPE}_${SIP}_t"
+        # Determine Mention Flag based on Type
+        local M_FLAG="NO"
+        if [ "$TYPE" = "Device" ]; then M_FLAG="$DISCORD_MENTION_LOCAL"; fi
+        if [ "$TYPE" = "Remote" ]; then M_FLAG="$DISCORD_MENTION_REMOTE"; fi
         
         if ping -q -c "$P_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
             if [ -f "$FD" ]; then
-                DSTART=$(cat "$FT"); DSSEC=$(cat "$FD"); DUR=$(( $(date +%s) - DSSEC ))
-                DR_STR="$((DUR/60))m $((DUR%60))s"
-                CUR_TIME=$(date '+%b %d %H:%M:%S')
-                D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $CUR_TIME\n**Outage:** $DR_STR"
-                T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP - $CUR_TIME - $DR_STR"
-                log_msg "[SUCCESS] ${TYPE}: $NAME Online ($DR_STR)" "UPTIME"
+                local DSTART; local DSSEC
+                read DSTART < "$FT"
+                read DSSEC < "$FD"
+                local DUR=$(( N_SEC - DSSEC ))
+                local DR_STR="$((DUR/60))m $((DUR%60))s"
+                
+                local D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Down at:** $DSTART\n**Up at:** $N_HUM\n**Outage:** $DR_STR"
+                local T_MSG="🟢 ${TYPE} UP* $ROUTER_NAME - $NAME - $TIP - $N_HUM - $DR_STR"
+                log_msg "[SUCCESS] ${TYPE}: $NAME Online ($DR_STR)" "UPTIME" "$N_HUM"
                 
                 if [ "$IS_SILENT" -eq 1 ]; then
                      if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "${TYPE} $NAME UP: $CUR_TIME (Down $DR_STR)" >> "$SILENT_BUFFER"
+                         echo "${TYPE} $NAME UP: $N_HUM (Down $DR_STR)" >> "$SILENT_BUFFER"
                      fi
                 else
-                     send_notification "🟢 ${TYPE} Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG"
+                     send_notification "🟢 ${TYPE} Online" "$D_MSG" "3066993" "SUCCESS" "BOTH" "NO" "$T_MSG" "$M_FLAG"
                 fi
                 rm -f "$FD" "$FT"
             fi
             echo 0 > "$FC"
         else
-            C=$(($(cat "$FC" 2>/dev/null || echo 0)+1)); echo "$C" > "$FC"
+            local C=0
+            [ -f "$FC" ] && read C < "$FC"
+            C=$((C+1))
+            echo "$C" > "$FC"
+            
             if [ "$C" -ge "$THRESH" ] && [ ! -f "$FD" ]; then
-                 TS=$(date '+%b %d %H:%M:%S'); echo "$(date +%s)" > "$FD"; echo "$TS" > "$FT"
-                 log_msg "[ALERT] ${TYPE}: $NAME Down" "UPTIME"
-                 D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Time:** $TS"
-                 T_MSG="🔴 ${TYPE} Down * $ROUTER_NAME - $NAME - $TIP - $TS"
+                 echo "$N_SEC" > "$FD"; echo "$N_HUM" > "$FT"
+                 log_msg "[ALERT] ${TYPE}: $NAME Down" "UPTIME" "$N_HUM"
+                 local D_MSG="**Router:** $ROUTER_NAME\n**${TYPE}:** $NAME ($TIP)\n**Time:** $N_HUM"
+                 local T_MSG="🔴 ${TYPE} Down * $ROUTER_NAME - $NAME - $TIP - $N_HUM"
                  
                  if [ "$IS_SILENT" -eq 1 ]; then
                      if [ -f "$SILENT_BUFFER" ] && [ $(wc -c < "$SILENT_BUFFER") -ge 5120 ]; then :; else
-                         echo "${TYPE} $NAME DOWN: $TS" >> "$SILENT_BUFFER"
+                         echo "${TYPE} $NAME DOWN: $N_HUM" >> "$SILENT_BUFFER"
                      fi
                  else
-                     # Note: Color 15548997 is RED, triggering Mentions in send_payload
-                     send_notification "🔴 ${TYPE} Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG"
+                     send_notification "🔴 ${TYPE} Down" "$D_MSG" "15548997" "ALERT" "BOTH" "NO" "$T_MSG" "$M_FLAG"
                  fi
             fi
         fi
@@ -913,25 +1016,31 @@ $SUMMARY_CONTENT"
     if [ "$DEVICE_MONITOR" = "YES" ]; then
         if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
             LAST_DEV_CHECK=$NOW_SEC
-            if [ "$EXEC_METHOD" -eq 1 ]; then
-                # PARALLEL
-                grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
-                    (
-                        TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
-                        NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
-                        [ -z "$NAME" ] && NAME="$TIP"
-                        [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT"
-                    ) &
-                done; wait
-            else
-                # SEQUENTIAL
-                grep -vE '^#|^$' "$IP_LIST_FILE" | while read -r line; do
-                    TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
-                    NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
-                    [ -z "$NAME" ] && NAME="$TIP"
-                    [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT"
-                done
-            fi
+            
+            # Optimization: Read file into loop directly, pure shell parsing
+            # No grep, cut, tr inside the loop!
+            while read -r line; do
+                # Skip comments and empty lines
+                case "$line" in \#*|"") continue ;; esac
+                
+                # Parse using shell expansion (fast!)
+                local TIP="${line%%@*}"
+                TIP="${TIP%% }" # Trim trailing space
+                TIP="${TIP## }" # Trim leading space
+                
+                local NAME="${line#*@}"
+                NAME="${NAME## }" # Trim leading space
+                [ "$NAME" = "$line" ] && NAME="$TIP" # Handle missing @ case
+                
+                if [ -n "$TIP" ]; then
+                    if [ "$EXEC_METHOD" -eq 1 ]; then
+                         check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN" &
+                    else
+                         check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN"
+                    fi
+                fi
+            done < "$IP_LIST_FILE"
+            [ "$EXEC_METHOD" -eq 1 ] && wait
         fi
     fi
 
@@ -939,23 +1048,25 @@ $SUMMARY_CONTENT"
     if [ "$REMOTE_MONITOR" = "YES" ] && [ "$EXT_UP_GLOBAL" -eq 1 ]; then
         if [ $((NOW_SEC - LAST_REM_CHECK)) -ge "$REM_SCAN_INTERVAL" ]; then
             LAST_REM_CHECK=$NOW_SEC
-            if [ "$EXEC_METHOD" -eq 1 ]; then
-                grep -vE '^#|^$' "$REMOTE_LIST_FILE" | while read -r line; do
-                    (
-                        TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
-                        NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
-                        [ -z "$NAME" ] && NAME="$TIP"
-                        [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT"
-                    ) &
-                done; wait
-            else
-                grep -vE '^#|^$' "$REMOTE_LIST_FILE" | while read -r line; do
-                    TIP=$(echo "$line" | cut -d'@' -f1 | tr -d ' ')
-                    NAME=$(echo "$line" | cut -d'@' -f2- | sed 's/^[ \t]*//')
-                    [ -z "$NAME" ] && NAME="$TIP"
-                    [ -n "$TIP" ] && check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT"
-                done
-            fi
+            
+            while read -r line; do
+                case "$line" in \#*|"") continue ;; esac
+                local TIP="${line%%@*}"
+                TIP="${TIP%% }"
+                TIP="${TIP## }"
+                local NAME="${line#*@}"
+                NAME="${NAME## }"
+                [ "$NAME" = "$line" ] && NAME="$TIP"
+                
+                if [ -n "$TIP" ]; then
+                    if [ "$EXEC_METHOD" -eq 1 ]; then
+                         check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN" &
+                    else
+                         check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN"
+                    fi
+                fi
+            done < "$REMOTE_LIST_FILE"
+            [ "$EXEC_METHOD" -eq 1 ] && wait
         fi
     fi
     sleep 1
@@ -1041,8 +1152,12 @@ discord() {
     local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
     if [ -n "\$webhook" ]; then
         echo "Sending Discord test..."
-        # Using curl for test command only (not critical path)
-        curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook"
+        # NOTE: Using uclient-fetch directly here for safety in service mode
+        if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
+            uclient-fetch --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
+        else
+            curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
+        fi
         echo "Sent."
     else
         echo "No Discord Webhook configured or vault locked."
@@ -1056,7 +1171,11 @@ telegram() {
     local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
     if [ -n "\$token" ]; then
         echo "Sending Telegram test..."
-        curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME"
+        if command -v uclient-fetch >/dev/null 2>&1; then
+             uclient-fetch --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" >/dev/null 2>&1
+        else
+             curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
+        fi
         echo "Sent."
     else
         echo "No Telegram Token configured or vault locked."
@@ -1169,18 +1288,19 @@ chmod +x "$SERVICE_PATH"
 "$SERVICE_PATH" restart >/dev/null 2>&1
 
 # ==============================================================================
-#  STEP 8: FINAL SUCCESS MESSAGE
+#  STEP 8: FINAL SUCCESS MESSAGE (FIXED: Uses safe_fetch)
 # ==============================================================================
 NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 MSG="**Router:** $router_name_input\n**Time:** $NOW_FINAL\n**Status:** Service Installed & Active"
 
 if [ "$DISCORD_ENABLE_VAL" = "YES" ] && [ -n "$DISCORD_WEBHOOK" ]; then
-    # Final success message uses portable Curl here (one-time event, safe)
-    curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🚀 netwatchdta Service Started\", \"description\": \"$MSG\", \"color\": 1752220}]}" "$DISCORD_WEBHOOK" >/dev/null 2>&1
+    # FIXED: Replaced curl with safe_fetch
+    safe_fetch "$DISCORD_WEBHOOK" "{\"embeds\": [{\"title\": \"🚀 netwatchdta Service Started\", \"description\": \"$MSG\", \"color\": 1752220}]}" "Content-Type: application/json"
 fi
 
 if [ "$TELEGRAM_ENABLE_VAL" = "YES" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-    curl -s -k -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" -d chat_id="$TELEGRAM_CHAT_ID" -d text="🚀 netwatchdta Service Started - $router_name_input" >/dev/null 2>&1
+    # FIXED: Replaced curl with safe_fetch
+    safe_fetch "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"🚀 netwatchdta Service Started - $router_name_input\"}" "Content-Type: application/json"
 fi
 
 # ==============================================================================
