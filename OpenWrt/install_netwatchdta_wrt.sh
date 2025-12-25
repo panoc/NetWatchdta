@@ -72,31 +72,34 @@ ask_opt() {
 }
 
 # ==============================================================================
-#  PORTABLE FETCH WRAPPER (FOR INSTALLER USE)
+#  PORTABLE FETCH WRAPPER (INSTALLER VERSION)
 # ==============================================================================
-# Defined early so the installer can use it for connectivity tests.
 safe_fetch() {
     local url="$1"
     local data="$2"   # JSON Payload
     local header="$3" # e.g. "Content-Type: application/json"
 
-    # STRATEGY 1: OpenWrt Native (Optimized RAM)
-    if command -v uclient-fetch >/dev/null 2>&1; then
-        # Check if this version supports headers (OpenWrt 23.05+)
-        if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --header="$header" --post-data="$data" "$url" >/dev/null 2>&1
-            return $?
-        fi
-        # Fallback for old OpenWrt (no header support) - Forces curl below
-    fi
-
-    # STRATEGY 2: Standard Linux (Curl)
+    # STRATEGY 1: Standard Linux (Curl) - Prioritized for Installer Reliability
+    # Curl outputs to stdout by default, so it does not leave orphan files.
     if command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
         return $?
     fi
 
+    # STRATEGY 2: OpenWrt Native (uclient-fetch)
+    # FIX APPLIED: Added '-O /dev/null' to prevent it from saving the JSON 
+    # response as a file named after the webhook token.
+    if command -v uclient-fetch >/dev/null 2>&1; then
+        # Check if this version supports headers (OpenWrt 23.05+)
+        if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
+            uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
+            return $?
+        fi
+        # Fallback for old OpenWrt (no header support) - Falls through to wget
+    fi
+
     # STRATEGY 3: Wget (Standard Linux Alternative)
+    # Wget requires -O /dev/null to avoid creating files.
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
@@ -110,7 +113,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.7 (Custom)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v1.9 (Full Grant)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -274,7 +277,6 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         ask_yn "   ❓ Send test notification to Discord now?"
         if [ "$ANSWER_YN" = "y" ]; then
              echo -e "${YELLOW}   🧪 Sending Discord test...${NC}"
-             # Updated to use safe_fetch for reliability
              if safe_fetch "$DISCORD_WEBHOOK" "{\"content\": \"<@$DISCORD_USERID>\", \"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "Content-Type: application/json"; then
                  echo -e "${GREEN}   ✅ Notification Sent.${NC}"
              else
@@ -388,7 +390,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         done
     fi
     
-    # 3f. Heartbeat Logic (Updated: Removed Mention Question)
+    # 3f. Heartbeat Logic
     HB_VAL="NO"
     HB_SEC="86400"
     HB_TARGET="BOTH"
@@ -439,7 +441,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         fi
     fi
 
-    # 3g. Summary Display (Requested vertical list format with Bold White)
+    # 3g. Summary Display
     echo -e "\n${BLUE}--- 📋 Configuration Summary ---${NC}"
     echo -e " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
     echo -e " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
@@ -449,7 +451,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
 
     # ==============================================================================
-    #  STEP 4: GENERATE CONFIGURATION FILES (UPDATED FORMAT)
+    #  STEP 4: GENERATE CONFIGURATION FILES (WITH DESCRIPTIONS)
     # ==============================================================================
     cat <<EOF > "$CONFIG_FILE"
 # settings.conf - Configuration for netwatchdta
@@ -470,10 +472,10 @@ SILENT_END=$user_silent_end # Hour to end silent mode (0-23). Default is 07.
 
 [Discord]
 # Toggle mentions <@UserID> for specific events (YES/NO)
-DISCORD_MENTION_LOCAL=YES
-DISCORD_MENTION_REMOTE=YES
-DISCORD_MENTION_NET=YES
-DISCORD_MENTION_HB=NO
+DISCORD_MENTION_LOCAL=YES # Mention on Local Device Down/Up events. Default is YES.
+DISCORD_MENTION_REMOTE=YES # Mention on Remote Device Down/Up events. Default is YES.
+DISCORD_MENTION_NET=YES # Mention on Internet Connectivity loss/restore. Default is YES.
+DISCORD_MENTION_HB=NO # Mention inside Heartbeat reports. Default is NO.
 
 [Performance Settings]
 CPU_GUARD_THRESHOLD=2.0 # Max CPU load average allowed before skipping pings. Default is 2.0.
@@ -672,7 +674,8 @@ safe_fetch() {
     if command -v uclient-fetch >/dev/null 2>&1; then
         # Check if this version supports headers (OpenWrt 23.05+)
         if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --header="$header" --post-data="$data" "$url" >/dev/null 2>&1
+            # FIX APPLIED: Added '-O /dev/null' to prevent orphan files
+            uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
             return $?
         fi
         # Fallback for old OpenWrt (no header support) - Continues to Curl
@@ -931,7 +934,7 @@ $SUMMARY_CONTENT" "NO"
                     log_msg "[SUCCESS] INTERNET UP (Down $DR)" "UPTIME" "$NOW_HUMAN"
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
-                        # Connectivity restore: Use NET mention flag (optional, usually users want mention on UP too if they want it on DOWN)
+                        # Connectivity restore: Use NET mention flag
                         send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T" "$DISCORD_MENTION_NET"
                         flush_buffer
                     else
@@ -1152,9 +1155,9 @@ discord() {
     local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
     if [ -n "\$webhook" ]; then
         echo "Sending Discord test..."
-        # NOTE: Using uclient-fetch directly here for safety in service mode
+        # NOTE: Using uclient-fetch with -O /dev/null for safety
         if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
+            uclient-fetch --no-check-certificate --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" -O /dev/null >/dev/null 2>&1
         else
             curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
         fi
@@ -1172,7 +1175,7 @@ telegram() {
     if [ -n "\$token" ]; then
         echo "Sending Telegram test..."
         if command -v uclient-fetch >/dev/null 2>&1; then
-             uclient-fetch --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" >/dev/null 2>&1
+             uclient-fetch --no-check-certificate --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" -O /dev/null >/dev/null 2>&1
         else
              curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
         fi
@@ -1288,7 +1291,7 @@ chmod +x "$SERVICE_PATH"
 "$SERVICE_PATH" restart >/dev/null 2>&1
 
 # ==============================================================================
-#  STEP 8: FINAL SUCCESS MESSAGE (FIXED: Uses safe_fetch)
+#  STEP 8: FINAL SUCCESS MESSAGE (FIXED: Uses safe_fetch + Priority Curl)
 # ==============================================================================
 NOW_FINAL=$(date '+%b %d, %Y %H:%M:%S')
 MSG="**Router:** $router_name_input\n**Time:** $NOW_FINAL\n**Status:** Service Installed & Active"
