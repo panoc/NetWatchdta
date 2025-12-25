@@ -108,7 +108,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.2 (Final)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.3 (Final)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -599,18 +599,19 @@ log_msg() {
     fi
 }
 
-# --- HELPER: CONFIG LOADER (Optimized: Check Mod Time) ---
+# --- HELPER: CONFIG LOADER (ROBUST FIX) ---
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         local cur_cfg_sig=$(ls -l --time-style=+%s "$CONFIG_FILE" 2>/dev/null || ls -l "$CONFIG_FILE")
         if [ "$cur_cfg_sig" != "$LAST_CFG_LOAD" ]; then
-            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//')"
+            # CRITICAL FIX: tr -d '\r' removes Windows line endings that break logic
+            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//' | tr -d '\r')"
             LAST_CFG_LOAD="$cur_cfg_sig"
         fi
     fi
 }
 
-# --- HELPER: HW KEY GENERATION (FIXED) ---
+# --- HELPER: HW KEY GENERATION (ROBUST) ---
 get_hw_key() {
     local seed="nwdta_v1_secure_seed_2025"
     local cpu_serial=$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print $2}' | tr -d ' ')
@@ -626,6 +627,8 @@ load_credentials() {
         local key=$(get_hw_key)
         local decrypted=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$key" -in "$VAULT_FILE" 2>/dev/null)
         if [ -n "$decrypted" ]; then
+            # Trim potential whitespace/newlines from decrypted output
+            decrypted=$(echo "$decrypted" | tr -d '\r')
             export DISCORD_WEBHOOK="${decrypted%%|*}"
             local temp1="${decrypted#*|}"
             export DISCORD_USERID="${temp1%%|*}"
@@ -883,6 +886,11 @@ $SUMMARY_CONTENT" "NO"
     check_ip_logic() {
         local TIP=$1; local NAME=$2; local TYPE=$3; local THRESH=$4; local P_COUNT=$5
         local N_SEC=$6; local N_HUM=$7
+        
+        # FIX: Ensure we didn't pick up hidden chars in args
+        TIP=$(echo "$TIP" | tr -d '\r')
+        NAME=$(echo "$NAME" | tr -d '\r')
+
         local SIP=$(echo "$TIP" | tr '.' '_')
         local FC="$TMP_DIR/${TYPE}_${SIP}_c"
         local FD="$TMP_DIR/${TYPE}_${SIP}_d"
@@ -932,14 +940,20 @@ $SUMMARY_CONTENT" "NO"
     if [ "$DEVICE_MONITOR" = "YES" ]; then
         if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
             LAST_DEV_CHECK=$NOW_SEC
-            while read -r line; do
+            # FIX: Loop robust against missing newlines
+            while read -r line || [ -n "$line" ]; do
                 case "$line" in \#*|"") continue ;; esac
+                
+                # Sanitize input (remove carriage returns)
+                line=$(echo "$line" | tr -d '\r')
+                
                 TIP="${line%%@*}"
                 TIP="${TIP%% }" 
                 TIP="${TIP## }" 
                 NAME="${line#*@}"
                 NAME="${NAME## }" 
                 [ "$NAME" = "$line" ] && NAME="$TIP" 
+                
                 if [ -n "$TIP" ]; then
                     if [ "$EXEC_METHOD" -eq 1 ]; then
                          check_ip_logic "$TIP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN" &
@@ -956,14 +970,20 @@ $SUMMARY_CONTENT" "NO"
     if [ "$REMOTE_MONITOR" = "YES" ] && [ "$EXT_UP_GLOBAL" -eq 1 ]; then
         if [ $((NOW_SEC - LAST_REM_CHECK)) -ge "$REM_SCAN_INTERVAL" ]; then
             LAST_REM_CHECK=$NOW_SEC
-            while read -r line; do
+            # FIX: Loop robust against missing newlines
+            while read -r line || [ -n "$line" ]; do
                 case "$line" in \#*|"") continue ;; esac
+                
+                # Sanitize input
+                line=$(echo "$line" | tr -d '\r')
+                
                 TIP="${line%%@*}"
                 TIP="${TIP%% }"
                 TIP="${TIP## }"
                 NAME="${line#*@}"
                 NAME="${NAME## }"
                 [ "$NAME" = "$line" ] && NAME="$TIP"
+                
                 if [ -n "$TIP" ]; then
                     if [ "$EXEC_METHOD" -eq 1 ]; then
                          check_ip_logic "$TIP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT" "$NOW_SEC" "$NOW_HUMAN" &
@@ -1033,8 +1053,8 @@ clear() {
 
 load_functions() {
     if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
-        # FIXED: Safe config loading (ignores headers)
-        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/ #.*//')"
+        # FIXED: Safe config loading (ignores headers and Windows newlines)
+        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/ #.*//' | tr -d '\r')"
     fi
 }
 
@@ -1058,6 +1078,8 @@ get_decrypted_creds() {
 discord() {
     load_functions
     local decrypted=\$(get_decrypted_creds)
+    # Sanitize decrypted output
+    decrypted=\$(echo "\$decrypted" | tr -d '\r')
     local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
     if [ -n "\$webhook" ]; then
         echo "Sending Discord test..."
@@ -1075,6 +1097,7 @@ discord() {
 telegram() {
     load_functions
     local decrypted=\$(get_decrypted_creds)
+    decrypted=\$(echo "\$decrypted" | tr -d '\r')
     local token=\$(echo "\$decrypted" | cut -d'|' -f3)
     local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
     if [ -n "\$token" ]; then
@@ -1101,6 +1124,7 @@ credentials() {
     
     load_functions
     local current=\$(get_decrypted_creds)
+    current=\$(echo "\$current" | tr -d '\r')
     local d_hook=\$(echo "\$current" | cut -d'|' -f1)
     local d_uid=\$(echo "\$current" | cut -d'|' -f2)
     local t_tok=\$(echo "\$current" | cut -d'|' -f3)
