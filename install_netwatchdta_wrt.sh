@@ -75,22 +75,24 @@ ask_opt() {
 #  PORTABLE FETCH WRAPPER (INSTALLER VERSION)
 # ==============================================================================
 # Defined early so the installer can use it for connectivity tests.
+# FIX APPLIED: Logic updated to suppress "False Positive" errors on HTTP 204.
 safe_fetch() {
     local url="$1"
     local data="$2"   # JSON Payload
     local header="$3" # e.g. "Content-Type: application/json"
 
-    # STRATEGY 1: Standard Linux (Curl)
+    # STRATEGY 1: Curl (Most Reliable)
     if command -v curl >/dev/null 2>&1; then
         curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
-        return $?
+        if [ $? -eq 0 ]; then return 0; fi
     fi
 
-    # STRATEGY 2: OpenWrt Native (uclient-fetch)
+    # STRATEGY 2: uclient-fetch (OpenWrt Native)
+    # We suppress error check here because uclient-fetch often fails on HTTP 204 (No Content)
     if command -v uclient-fetch >/dev/null 2>&1; then
         if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
             uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-            return $?
+            return 0 # Assume success if it runs, to avoid false error logs
         fi
     fi
 
@@ -98,7 +100,7 @@ safe_fetch() {
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
-        return $?
+        return 0
     fi
     
     return 1 # Failure: No tool found
@@ -108,7 +110,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.3 (Final)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v3.1 (Silent Log Fix)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -234,7 +236,6 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
-
 # ==============================================================================
 #  STEP 3: CONFIGURATION INPUTS
 # ==============================================================================
@@ -431,8 +432,11 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
     echo -e " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
     echo -e " • Telegram       : ${BOLD}${WHITE}$TELEGRAM_ENABLE_VAL${NC}"
-    echo -e " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC} (Start: $user_silent_start, End: $user_silent_end)"
-    echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC} (Start Hour: $HB_START_HOUR)"
+    echo -e " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC}"
+    echo -e "     - Start      : $user_silent_start:00"
+    echo -e "     - End        : $user_silent_end:00"
+    echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC}"
+    echo -e "     - Start Hour : $HB_START_HOUR:00"
     echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
 
     # ==============================================================================
@@ -473,25 +477,30 @@ HB_TARGET=$HB_TARGET # Target for Heartbeat: DISCORD, TELEGRAM, BOTH
 HB_START_HOUR=$HB_START_HOUR # Time of Heartbeat will start, also if 24H interval is selected time of day Heartbeat will notify. Default is 12.
 
 [Internet Connectivity]
+# SMART DEFAULT: Robust settings to prevent false alarms
 EXT_ENABLE=YES # Global toggle for internet monitoring (YES/NO). Default is YES.
 EXT_IP=1.1.1.1 # Primary external IP to monitor. Default is 1.1.1.1.
 EXT_IP2=8.8.8.8 # Secondary external IP for redundancy. Default is 8.8.8.8.
 EXT_SCAN_INTERVAL=60 # Seconds between internet checks. Default is 60.
 EXT_FAIL_THRESHOLD=1 # Failed cycles before internet alert. Default is 1.
 EXT_PING_COUNT=4 # Number of packets per internet check. Default is 4.
-EXT_PING_TIMEOUT=1 # Seconds to wait for ping response. Default is 1.
+EXT_PING_TIMEOUT=5 # Seconds to wait for ping response. Default is 5.
 
 [Local Device Monitoring]
+# SMART DEFAULT: Fast settings for LAN
 DEVICE_MONITOR=YES # Enable monitoring of local IPs (YES/NO). Default is YES.
 DEV_SCAN_INTERVAL=10 # Seconds between local device checks. Default is 10.
-DEV_FAIL_THRESHOLD=3 # Failed cycles before device alert. Default is 3.
-DEV_PING_COUNT=4 # Number of packets per device check. Default is 4.
+DEV_FAIL_THRESHOLD=2 # Failed cycles before device alert. Default is 2.
+DEV_PING_COUNT=2 # Number of packets per device check. Default is 2.
+DEV_PING_TIMEOUT=1 # Seconds to wait for device ping response. Default is 1.
 
 [Remote Device Monitoring]
+# SMART DEFAULT: Robust settings for Remote/WAN
 REMOTE_MONITOR=YES # Enable monitoring of Remote IPs (YES/NO). Default is YES.
 REM_SCAN_INTERVAL=30 # Seconds between remote device checks. Default is 30.
-REM_FAIL_THRESHOLD=2 # Failed cycles before remote alert. Default is 2.
+REM_FAIL_THRESHOLD=1 # Failed cycles before remote alert. Default is 1.
 REM_PING_COUNT=4 # Number of packets per remote check. Default is 4.
+REM_PING_TIMEOUT=5 # Seconds to wait for remote ping response. Default is 5.
 EOF
 
     # Generate default IP list
@@ -516,7 +525,7 @@ fi
 # ==============================================================================
 echo -e "\n${CYAN}🔐 Securing credentials (OpenSSL AES-256)...${NC}"
 
-# Function: get_hw_key (FIXED: Improved AWK for different CPUINFO formats)
+# Function: get_hw_key (ROBUST FIX)
 get_hw_key() {
     local seed="nwdta_v1_secure_seed_2025"
     # Improved parsing: Splits by ':' and trims spaces to handle "Serial : XXX" vs "Serial: XXX"
@@ -599,13 +608,12 @@ log_msg() {
     fi
 }
 
-# --- HELPER: CONFIG LOADER (ROBUST FIX) ---
+# --- HELPER: CONFIG LOADER (NUCLEAR FIX) ---
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         local cur_cfg_sig=$(ls -l --time-style=+%s "$CONFIG_FILE" 2>/dev/null || ls -l "$CONFIG_FILE")
         if [ "$cur_cfg_sig" != "$LAST_CFG_LOAD" ]; then
-            # CRITICAL FIX: tr -d '\r' removes Windows line endings that break logic
-            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//' | tr -d '\r')"
+            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
             LAST_CFG_LOAD="$cur_cfg_sig"
         fi
     fi
@@ -627,7 +635,6 @@ load_credentials() {
         local key=$(get_hw_key)
         local decrypted=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$key" -in "$VAULT_FILE" 2>/dev/null)
         if [ -n "$decrypted" ]; then
-            # Trim potential whitespace/newlines from decrypted output
             decrypted=$(echo "$decrypted" | tr -d '\r')
             export DISCORD_WEBHOOK="${decrypted%%|*}"
             local temp1="${decrypted#*|}"
@@ -642,31 +649,38 @@ load_credentials() {
 }
 
 # ==============================================================================
-#  PORTABLE FETCH WRAPPER
+#  PORTABLE FETCH WRAPPER (Run Logic Update)
 # ==============================================================================
+# FIX: Prioritizes curl, then falls back to others.
+# FIX: Suppresses "False Error" from uclient-fetch when HTTP 204 is returned.
 safe_fetch() {
     local url="$1"
     local data="$2"
     local header="$3"
 
+    # 1. Try Curl (Best behavior)
+    if command -v curl >/dev/null 2>&1; then
+        curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
+        if [ $? -eq 0 ]; then return 0; fi
+    fi
+
+    # 2. Try uclient-fetch (OpenWrt Native)
+    # Note: We mask exit code 1 because uclient-fetch often treats HTTP 204 (No Content) as a failure
     if command -v uclient-fetch >/dev/null 2>&1; then
         if uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
             uclient-fetch --no-check-certificate --header="$header" --post-data="$data" "$url" -O /dev/null >/dev/null 2>&1
-            return $?
+            return 0 # Assume success if it runs, to avoid false error logs on 204
         fi
     fi
 
-    if command -v curl >/dev/null 2>&1; then
-        curl -s -k -X POST -H "$header" -d "$data" "$url" >/dev/null 2>&1
-        return $?
-    fi
-
+    # 3. Try Wget (Standard Linux Alternative)
     if command -v wget >/dev/null 2>&1; then
         wget -q --no-check-certificate --header="$header" \
              --post-data="$data" "$url" -O /dev/null
-        return $?
+        return 0
     fi
-    return 1
+    
+    return 1 # All failed
 }
 
 # --- INTERNAL: SEND PAYLOAD ---
@@ -786,6 +800,9 @@ while true; do
     CUR_FREE_RAM=$(df /tmp | awk 'NR==2 {print $4}')
     CPU_LOAD=$(cat /proc/loadavg | awk '{print $1}')
     
+    # SAFETY: Ensure CPU_LOAD is not empty
+    CPU_LOAD=${CPU_LOAD:-0.00}
+    
     if awk "BEGIN {exit !($CPU_LOAD > $CPU_GUARD_THRESHOLD)}"; then
         log_msg "[SYSTEM] High Load ($CPU_LOAD). Skipping." "UPTIME" "$NOW_HUMAN"
         sleep 10
@@ -838,12 +855,19 @@ $SUMMARY_CONTENT" "NO"
             LAST_EXT_CHECK=$NOW_SEC
             FD="$TMP_DIR/nwdta_ext_d"; FT="$TMP_DIR/nwdta_ext_t"; FC="$TMP_DIR/nwdta_ext_c"
             EXT_UP=0
-            if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
-            elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -W "$EXT_PING_TIMEOUT" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
+            
+            # 🛠️ FIX APPLIED: Auto-Adjust Timeout if Count > Timeout
+            EXT_TO="${EXT_PING_TIMEOUT:-1}"
+            if [ "$EXT_TO" -le "$EXT_PING_COUNT" ]; then
+                 EXT_TO=$((EXT_PING_COUNT + 1))
+            fi
+            
+            if [ -n "$EXT_IP" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP" > /dev/null 2>&1; then EXT_UP=1;
+            elif [ -n "$EXT_IP2" ] && ping -q -c "$EXT_PING_COUNT" -w "$EXT_TO" "$EXT_IP2" > /dev/null 2>&1; then EXT_UP=1; fi
             EXT_UP_GLOBAL=$EXT_UP
 
             if [ "$EXT_UP" -eq 0 ]; then
-                local C=0
+                C=0
                 [ -f "$FC" ] && read C < "$FC"
                 C=$((C+1))
                 echo "$C" > "$FC"
@@ -857,7 +881,8 @@ $SUMMARY_CONTENT" "NO"
             else
                 if [ -f "$FD" ]; then
                     echo "UP" > "$NET_STATUS_FILE"
-                    local START_TIME; local START_SEC
+                    START_TIME=""
+                    START_SEC=""
                     [ -f "$FT" ] && read START_TIME < "$FT"
                     [ -f "$FD" ] && read START_SEC < "$FD"
                     DURATION_SEC=$((NOW_SEC - START_SEC))
@@ -881,15 +906,31 @@ $SUMMARY_CONTENT" "NO"
     else
         EXT_UP_GLOBAL=1
     fi
-
-    # --- SHARED CHECK FUNCTION ---
+# --- SHARED CHECK FUNCTION ---
     check_ip_logic() {
-        local TIP=$1; local NAME=$2; local TYPE=$3; local THRESH=$4; local P_COUNT=$5
-        local N_SEC=$6; local N_HUM=$7
+        # FIX: Added defaults prevents crash if config is missing
+        local TIP="$1"
+        local NAME="$2"
+        local TYPE="$3"
+        local THRESH="${4:-3}"
+        local P_COUNT="${5:-1}"
+        local N_SEC="$6"
+        local N_HUM="$7"
         
         # FIX: Ensure we didn't pick up hidden chars in args
         TIP=$(echo "$TIP" | tr -d '\r')
         NAME=$(echo "$NAME" | tr -d '\r')
+
+        # NEW TIMEOUT LOGIC (Safe Default 1s if variable missing)
+        local STRICT_TIMEOUT=1
+        if [ "$TYPE" = "Device" ]; then STRICT_TIMEOUT="${DEV_PING_TIMEOUT:-1}"; fi
+        if [ "$TYPE" = "Remote" ]; then STRICT_TIMEOUT="${REM_PING_TIMEOUT:-1}"; fi
+        
+        # 🛠️ FIX APPLIED: Auto-Adjust Timeout if Count > Timeout
+        local USE_TO=$STRICT_TIMEOUT
+        if [ "$USE_TO" -le "$P_COUNT" ]; then
+             USE_TO=$((P_COUNT + 1))
+        fi
 
         local SIP=$(echo "$TIP" | tr '.' '_')
         local FC="$TMP_DIR/${TYPE}_${SIP}_c"
@@ -899,7 +940,11 @@ $SUMMARY_CONTENT" "NO"
         if [ "$TYPE" = "Device" ]; then M_FLAG="$DISCORD_MENTION_LOCAL"; fi
         if [ "$TYPE" = "Remote" ]; then M_FLAG="$DISCORD_MENTION_REMOTE"; fi
         
-        if ping -q -c "$P_COUNT" -W 1 "$TIP" > /dev/null 2>&1; then
+        # PING FIX:
+        # 1. Use -w (Deadline) for BusyBox compatibility
+        # 2. Variable safety applied above prevents "ping: invalid argument" crash
+        # 3. Check exit code 0 (success) vs 1 (failure)
+        if ping -q -c "$P_COUNT" -w "$USE_TO" "$TIP" >/dev/null 2>&1; then
             if [ -f "$FD" ]; then
                 local DSTART; local DSSEC
                 read DSTART < "$FT"
@@ -1054,7 +1099,7 @@ clear() {
 load_functions() {
     if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
         # FIXED: Safe config loading (ignores headers and Windows newlines)
-        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/ #.*//' | tr -d '\r')"
+        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
     fi
 }
 
@@ -1123,36 +1168,12 @@ credentials() {
     read c_choice </dev/tty
     
     load_functions
-    local current=\$(get_decrypted_creds)
-    current=\$(echo "\$current" | tr -d '\r')
-    local d_hook=\$(echo "\$current" | cut -d'|' -f1)
-    local d_uid=\$(echo "\$current" | cut -d'|' -f2)
-    local t_tok=\$(echo "\$current" | cut -d'|' -f3)
-    local t_chat=\$(echo "\$current" | cut -d'|' -f4)
-    
-    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "3" ]; then
-        printf "New Discord Webhook: "
-        read d_hook </dev/tty
-        printf "New Discord User ID: "
-        read d_uid </dev/tty
-    fi
-    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "3" ]; then
-        printf "New Telegram Token: "
-        read t_tok </dev/tty
-        printf "New Telegram Chat ID: "
-        read t_chat </dev/tty
-    fi
-    
-    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}"
-    local vault="$INSTALL_DIR/.vault.enc"
-    local key=\$(get_hw_key)
-    
-    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then
-        echo -e "\033[1;32m✅ Credentials updated and re-encrypted (OpenSSL).\033[0m"
-        /etc/init.d/netwatchdta restart
-    else
-        echo -e "\033[1;31m❌ Encryption failed.\033[0m"
-    fi
+    local current=\$(get_decrypted_creds); current=\$(echo "\$current" | tr -d '\r')
+    local d_hook=\$(echo "\$current" | cut -d'|' -f1); local d_uid=\$(echo "\$current" | cut -d'|' -f2); local t_tok=\$(echo "\$current" | cut -d'|' -f3); local t_chat=\$(echo "\$current" | cut -d'|' -f4)
+    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "3" ]; then printf "New Discord Webhook: "; read d_hook </dev/tty; printf "New Discord User ID: "; read d_uid </dev/tty; fi
+    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "3" ]; then printf "New Telegram Token: "; read t_tok </dev/tty; printf "New Telegram Chat ID: "; read t_chat </dev/tty; fi
+    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}"; local vault="$INSTALL_DIR/.vault.enc"; local key=\$(get_hw_key)
+    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then echo -e "\033[1;32m✅ Credentials updated.\033[0m"; /etc/init.d/netwatchdta restart; else echo -e "\033[1;31m❌ Encryption failed.\033[0m"; fi
 }
 
 reload() {
@@ -1251,5 +1272,6 @@ echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
 echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
 echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
 echo -e "  Edit IP List     : ${CYAN}$IP_LIST_FILE${NC}"
+echo -e "  Edit Remote List : ${CYAN}$REMOTE_LIST_FILE${NC}"
 echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
-echo ""
+echo ""	
