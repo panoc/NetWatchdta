@@ -108,7 +108,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.31 (Final)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Automated Setup${NC} v2.32 (Final)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo ""
@@ -599,13 +599,17 @@ log_msg() {
     fi
 }
 
-# --- HELPER: CONFIG LOADER (ROBUST FIX) ---
+# --- HELPER: CONFIG LOADER (NUCLEAR FIX) ---
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         local cur_cfg_sig=$(ls -l --time-style=+%s "$CONFIG_FILE" 2>/dev/null || ls -l "$CONFIG_FILE")
         if [ "$cur_cfg_sig" != "$LAST_CFG_LOAD" ]; then
-            # CRITICAL FIX: tr -d '\r' removes Windows line endings that break logic
-            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/ #.*//' | tr -d '\r')"
+            # EXPLANATION OF FIX:
+            # 1. /^\[.*\]/d         -> Remove [Header] lines
+            # 2. s/[ \t]*#.*//      -> Remove comments (#) and any spaces/tabs before them
+            # 3. s/[ \t]*$//        -> Remove any remaining trailing spaces at end of line
+            # 4. tr -d '\r'         -> Remove Windows carriage returns
+            eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
             LAST_CFG_LOAD="$cur_cfg_sig"
         fi
     fi
@@ -1054,7 +1058,7 @@ clear() {
 load_functions() {
     if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
         # FIXED: Safe config loading (ignores headers and Windows newlines)
-        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/ #.*//' | tr -d '\r')"
+        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
     fi
 }
 
