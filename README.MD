@@ -226,7 +226,7 @@ Now you can view the live monitor logs directly from your browser by going to **
 
 ---
 
-## RAM & CPU Usage Scaling
+## 📈 RAM & CPU Usage Scaling
 
 <details>
 <summary><strong>Click to expand: Combined Resource Scaling & Safe Limits</strong></summary>
