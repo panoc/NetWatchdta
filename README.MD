@@ -32,7 +32,8 @@ Originally designed for OpenWrt routers, **v4.x** has been re-engineered as a **
 
 ## ✅ Supported Operating Systems
 
-NetWatchdta v4.x automatically adapts to the underlying OS.
+<details>
+<summary><strong>🐧NetWatchdta v4.x automatically adapts to the underlying OS.</strong></summary>
 
 | Category | Status | Supported Distributions | Notes |
 | --- | --- | --- | --- |
@@ -47,6 +48,7 @@ NetWatchdta v4.x automatically adapts to the underlying OS.
 * **Alpine Linux** (Uses OpenRC, not supported yet).
 * **Slackware / Void / Gentoo** (Non-Systemd inits).
 * **BSD / macOS** (Different userland tools).
+</details>
 
 ---
 
