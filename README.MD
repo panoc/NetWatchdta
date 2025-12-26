@@ -282,8 +282,14 @@ You have two ways to uninstall the tool. Both launch the interactive **Smart Uni
 
 ### Method 1: Built-in (Recommended)
 
-* **Linux:** `sudo netwatchdta purge`
-* **OpenWrt:** `/etc/init.d/netwatchdta purge`
+* **Linux:** 
+```bash 
+sudo netwatchdta purge
+```
+```bash 
+* **OpenWrt:** 
+/etc/init.d/netwatchdta purge
+```
 
 ### Method 2: Emergency Script
 
