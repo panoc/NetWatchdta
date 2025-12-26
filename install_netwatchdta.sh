@@ -1498,7 +1498,6 @@ if [ "$SERVICE_TYPE" = "PROCD" ]; then
     echo -e "  Status           : ${YELLOW}/etc/init.d/netwatchdta check${NC}"
     echo -e "  Logs             : ${YELLOW}/etc/init.d/netwatchdta logs${NC}"
     echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
-    echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
     echo -e "  Edit Settings    : ${YELLOW}/etc/init.d/netwatchdta edit${NC}"
     echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
 else
@@ -1506,5 +1505,6 @@ else
     echo -e "  Logs             : ${YELLOW}netwatchdta logs${NC}"
     echo -e "  Uninstall        : ${RED}netwatchdta purge${NC}"
     echo -e "  Edit Settings    : ${YELLOW}netwatchdta edit${NC}"
+    echo -e "  Restart          : ${YELLOW}netwatchdta restart${NC}"
 fi
 echo ""
