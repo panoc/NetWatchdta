@@ -148,9 +148,10 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 | `REM_PING_TIMEOUT | Seconds to wait for remote ping response. |
 </details>
 
----
 
-## 🖥️ LuCI Web Interface Integration (Optional)
+
+<details>
+<summary><strong>🖥️ LuCI Web Interface Integratio/strong></summary>
 
 *For OpenWrt Users Only*
 
@@ -162,7 +163,6 @@ opkg update && opkg install luci-app-commands
 
 ```
 
-
 2. **Configure the Menu:**
 * Go to **System** ➡️ **Custom Commands**.
 * Click **Add**.
@@ -170,9 +170,8 @@ opkg update && opkg install luci-app-commands
 * **Command:** `/etc/init.d/netwatchdta logs`
 * Click **Save & Apply**.
 
-
-
 Now you can view the live monitor logs directly from your browser by going to **System** ➡️ **Custom Commands**!
+</details>
 
 ---
 
