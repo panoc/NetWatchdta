@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/OS-OpenWrt%20%7C%20Linux-1272ba?style=flat-squarelogo=openwrt&logoColor=white">
   <img src="https://img.shields.io/badge/Network-Monitoring%20and%20Logs-006400?style=flat-square&logo=activity&logoColor=white">  
    <img src="https://img.shields.io/badge/Alerts-Discord%20%26%20Telegram-7289da?style=flat-square&logo=alerts&logoColor=white">
- <img src="https://img.shields.io/badge/Shell-Script-7289da?style=flat-square&logo=alerts&logoColor=orange">
+ <img src="https://img.shields.io/badge/Shell-Script-orange?style=flat-square&logo=alerts&logoColor=orange">
   </p>
 
 **NetWatchdta** is a lightweight, robust, and highly configurable network monitoring script. It continuously monitors your Internet connection (WAN), Local Devices (LAN), and Remote Servers, sending real-time alerts via **Discord** and **Telegram**.
