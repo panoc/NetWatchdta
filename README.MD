@@ -69,10 +69,10 @@ sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.gi
 
 *No sudo required.*
 
-*Requires `wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta_wrt.sh" && sh /tmp/install_netwatchdta.sh`.
+*Requires `Curl` if you have problem with the default uclient-fetch and/or if you want to manually swtich to curl*
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta.sh | sh
+wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta_wrt.sh" && sh /tmp/install_netwatchdta.sh
 
 ```
 
