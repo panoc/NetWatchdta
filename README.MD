@@ -1,5 +1,3 @@
-Here is the final, complete **README.md** with the **LuCI Web Interface Integration** section added.
-
 ---
 
 # 🌐 NetWatchdta (Universal)
@@ -9,6 +7,38 @@ Here is the final, complete **README.md** with the **LuCI Web Interface Integrat
 **NetWatchdta** is a lightweight, robust, and highly configurable network monitoring script. It continuously monitors your Internet connection (WAN), Local Devices (LAN), and Remote Servers, sending real-time alerts via **Discord** and **Telegram**.
 
 Originally designed for OpenWrt routers, **v4.x** has been re-engineered as a **Universal Application**. It automatically detects your operating system, adjusts its dependencies, and installs as a native system service (`procd` for OpenWrt, `systemd` for Linux).
+
+---
+
+<details>
+<summary><strong>📊 Click to expand: Resource Scaling by Chipset & Architecture</strong></summary>
+
+### **1. Parallel Mode (Performance Focused)**
+*Simultaneous execution. Fastest alerts, but creates a CPU spike due to concurrent TLS handshakes.*
+
+| Chipset Tier | Common CPU / Architecture | Example Devices | 5 Events (CPU) | **5 Events (RAM)** | 50 Events (CPU) | **50 Events (RAM)** | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy MIPS** | **MediaTek MT7621**<br>*(MIPS 1004Kc Dual)* | Ubiquiti ER-X, Xiaomi 4A Gig | Moderate | **~3 MB** | **💀 CRITICAL**<br>*(100% CPU Lag)* | **~12 MB** | **❌ NO**<br>*(Use Sequential)* |
+| | **Qualcomm QCA95xx**<br>*(MIPS 74Kc Single)* | Archer C7, TP-Link WDR4300 | Moderate | **~3 MB** | **💀 CRITICAL**<br>*(100% CPU Freeze)* | **~12 MB** | **❌ NO**<br>*(Use Sequential)* |
+| **Mid-Range** | **Rockchip RK3399**<br>*(ARMv8 Hexa-Core)* | **NanoPi R4S**, R2S, Orange Pi | Negligible | **~8 MB** | **Moderate**<br>*(~60% CPU)* | **~25 MB** | **✅ YES**<br>*(Excellent)* |
+| | **Broadcom BCM2711**<br>*(ARMv8 Quad-Core)* | **Raspberry Pi 4**, Pi 5 | Negligible | **~8 MB** | **Moderate**<br>*(~60% CPU)* | **~25 MB** | **✅ YES**<br>*(Excellent)* |
+| | **MediaTek Filogic 820**<br>*(ARMv8 Cortex-A53)* | **Flint 2 (MT6000)**, AX3000 | Negligible | **~4 MB** | **High Spike**<br>*(~80% CPU)* | **~18 MB** | **✅ YES**<br>*(Safe)* |
+| **High-End** | **Rockchip RK3588**<br>*(ARMv8 Octa-Core)* | **NanoPi R6S**, Orange Pi 5 | Negligible | **~10 MB** | **Low Load**<br>*(~20% CPU)* | **~40 MB** | **✅ YES**<br>*(Best Perf)* |
+| | **Intel N100 / x86**<br>*(x86_64)* | Mini PC Routers, PfSense | Negligible | **~20 MB** | **Low Load**<br>*(~15% CPU)* | **~150 MB*** | **✅ YES**<br>*(Best Perf)* |
+
+> ***Note on x86 RAM:** Linux `bash` and `curl` use significantly more private memory per process than OpenWrt's optimized `ash` and `uclient-fetch`.*
+
+### **2. Sequential Mode (Stability Focused)**
+*One-by-one execution. Zero spikes. **Mandatory for MIPS**.*
+
+| Chipset Tier | Common CPU / Architecture | Example Devices | 5 Events (CPU) | **5 Events (RAM)** | 50 Events (CPU) | **50 Events (RAM)** | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy MIPS** | **MediaTek MT7621** | Ubiquiti ER-X, R6220 | Low (<10%) | **~2 MB** | **Safe (<25%)** | **~2 MB** | **✅ YES**<br>*(Mandatory)* |
+| | **Qualcomm QCA95xx** | Archer C7, WDR4300 | Low (<10%) | **~2 MB** | **Safe (<25%)** | **~2 MB** | **✅ YES**<br>*(Mandatory)* |
+| **Mid-Range** | **All ARMv8 Chips** | NanoPi R4S, RPi 4, Flint 2 | Negligible | **~4 MB** | **Negligible** | **~4 MB** | **⚠️ Optional**<br>*(Max Stability)* |
+| **High-End** | **x86 / RK3588** | N100, NanoPi R6S | Negligible | **~15 MB** | **Negligible** | **~15 MB** | **❌ Unnecessary** |
+
+</details>
 
 ---
 
