@@ -61,7 +61,7 @@ The installer will automatically detect your OS, install necessary dependencies 
 *Requires `curl` and `sudo`.*
 
 ```bash
-sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta_linux.sh" && sudo bash /tmp/install_netwatchdta.sh
+sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta.sh" && sudo bash /tmp/install_netwatchdta.sh
 
 ```
 
@@ -72,7 +72,7 @@ sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.gi
 *Requires `Curl` if you have problem with the default uclient-fetch and/or if you want to manually swtich to curl*
 
 ```bash
-wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta_wrt.sh" && sh /tmp/install_netwatchdta.sh
+wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta.sh" && sh /tmp/install_netwatchdta.sh
 
 ```
 
@@ -306,12 +306,12 @@ If the installation is broken, use the remote uninstaller:
 
 * **Linux:** 
 ```bash 
-`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta_linux.sh" && sudo bash /tmp/uninstall_netwatchdta.sh`
+`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sudo bash /tmp/uninstall_netwatchdta.sh`
 ```
 
 * **OpenWrt:** 
 ```bash 
-`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta_wrt.sh" && sh /tmp/uninstall_netwatchdta_wrt.sh`
+`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sh /tmp/uninstall_netwatchdta_wrt.sh`
 ```
 ---
 
