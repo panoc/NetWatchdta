@@ -5,7 +5,14 @@
 **NetWatchdta** is a lightweight, robust, and highly configurable network monitoring script. It continuously monitors your Internet connection (WAN), Local Devices (LAN), and Remote Servers, sending real-time alerts via **Discord** and **Telegram**.
 
 Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **Universal Application**. It automatically detects your operating system, adjusts its dependencies, adjusts default settings based on your hardware and installs as a native system service (`procd` for OpenWrt, `systemd` for Linux).
+# <img src="https://img.icons8.com/fluency/96/console.png" width="45" vertical-align="middle"> NetWatchdta
 
+<p align="left">
+  <img src="https://img.shields.io/badge/OS-Linux%20%7C%20OpenWrt-1272ba?style=for-the-badge&logo=openwrt&logoColor=white">
+  <img src="https://img.shields.io/badge/Alerts-Discord%20%26%20Telegram-7289da?style=for-the-badge&logo=discord&logoColor=white">
+  <img src="https://img.shields.io/badge/Vault-AES--256-red?style=for-the-badge&logo=keepassxc&logoColor=white">
+  <img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge">
+</p>
 <br>
 
 ---
