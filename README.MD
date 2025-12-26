@@ -26,8 +26,6 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
      * **Local (LAN):** Monitors devices on your network (e.g., NAS, Cameras).
      * **Remote:** Monitors external servers (only checks if WAN is UP).
 
-
-
 ---
 
 ## 🖥️ Supported Operating Systems
@@ -124,7 +122,7 @@ These files integrate the script with your operating system.
 | **OpenWrt** | `/etc/init.d/netwatchdta` | Procd init script to manage the service. |
 | **Linux** | `/etc/systemd/system/netwatchdta.service` | Systemd unit file to manage the service. |
 | **Linux** | `/usr/local/bin/netwatchdta` | CLI wrapper command (allows typing `netwatchdta` directly). |
-<details>
+</details>
 
 ---
 
