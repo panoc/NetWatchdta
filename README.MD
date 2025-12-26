@@ -53,7 +53,6 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 
 ---
 
-
 ## 🚀 Installation
 
 The installer will automatically detect your OS, install necessary dependencies (`curl`, `openssl`, etc.), and set up the service.
@@ -124,9 +123,9 @@ These files integrate the script with your operating system.
 | **Linux** | `/etc/systemd/system/netwatchdta.service` | Systemd unit file to manage the service. |
 | **Linux** | `/usr/local/bin/netwatchdta` | CLI wrapper command (allows typing `netwatchdta` directly). |  
 </details>
+<br>
 
 ---
-<br>
 
 ## 🛠️ Management & Commands
 
@@ -321,9 +320,9 @@ Now you can view the live monitor logs directly from your browser by going to **
 >
 > It is better to receive your 50th alert **2 minutes late** than to have your monitoring device **crash** because it tried to send them all at the exact same second.
 </details>
+<br>
 
 ---
-<br>
 
 ## 🗑️ Uninstallation
 
@@ -354,8 +353,9 @@ If the installation is broken, use the remote uninstaller:
 ```bash 
 `wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sh /tmp/uninstall_netwatchdta_wrt.sh`
 ```
----
 <br>
+
+---
 
 ## 🔒 Security Note
 
@@ -363,9 +363,9 @@ This script uses **OpenSSL AES-256** to encrypt your Discord Webhook and Telegra
 
 * **Benefit:** If someone copies your config files to another machine, they cannot decrypt your credentials.
 * **Note:** If you change your hardware (e.g., swap Raspberry Pis), you must run the installer again to re-encrypt your credentials.
+<br>
 
 ---
-<br>
 
 ## 📜 License
 
