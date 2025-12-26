@@ -30,7 +30,7 @@ Originally designed for OpenWrt routers, **v4.x** has been re-engineered as a **
 > The device will likely hit **100% CPU usage** for several seconds.
 > * **On Routers:** This may cause temporary Wi-Fi lag or packet loss.
 > * **On Raspberry Pis:** The system may become sluggish or unresponsive via SSH.
-> ***Note on x86 RAM:** Linux `bash` and `curl` use significantly more private memory per process than OpenWrt's optimized `ash` and `uclient-fetch`.*
+> * **Note on x86 RAM:** Linux `bash` and `curl` use significantly more private memory per process than OpenWrt's optimized `ash` and `uclient-fetch`.*
 
 ### **2. Sequential Mode (Stability Focused)**
 *One-by-one execution. Zero resource spikes. Unlimited capacity.*
