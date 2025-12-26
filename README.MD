@@ -27,6 +27,7 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
      * **Local (LAN):** Monitors devices on your network (e.g., NAS, Cameras).
      * **Remote:** Monitors external servers (only checks if WAN is UP).
 <br>
+
 ---
 
 ## 🖥️ Supported Operating Systems
@@ -49,7 +50,9 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 * **BSD / macOS** (Different userland tools).
 </details>
 <br>
+
 ---
+
 
 ## 🚀 Installation
 
