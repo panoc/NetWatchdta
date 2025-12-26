@@ -151,7 +151,7 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 
 ### 🖥️ LuCI Web Interface Integration
 <details>
-<summary><strong>Installation guide.<strong></summary>
+<summary><strong>Installation guide</strong></summary>
 
 *For OpenWrt Users Only*
 
