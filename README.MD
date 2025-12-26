@@ -199,6 +199,41 @@ Now you can view the live monitor logs directly from your browser by going to **
 >* The **100% CPU spike** during 50 simultaneous events is due to the heavy math required for 50 concurrent TLS (HTTPS) handshakes. While RAM usage remains safe/low due to shared libraries, the processor may be momentarily saturated, potentially causing brief web interface lag.
 
 ---
+
+<details>
+<summary><strong>📊 Click to expand: Resource Scaling by Chipset & Architecture</strong></summary>
+
+### **1. Parallel Mode (Performance Focused)**
+*Simultaneous execution. Fastest alerts, but requires Hardware Crypto Support.*
+
+| Chipset Tier | Common CPU / Architecture | Example Devices | 5 Events (CPU) | 50 Events (CPU) | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy & Budget**<br>*(MIPS / Older ARM)* | **MediaTek MT7621**<br>*(MIPS 1004Kc Dual)* | Ubiquiti ER-X, Netgear R6220, Xiaomi 4A Gig | Low | **💀 CRITICAL**<br>*(100% Freeze)* | **❌ NO**<br>*(Use Sequential)* |
+| | **Qualcomm QCA95xx**<br>*(MIPS 74Kc Single)* | Archer C7, TP-Link WDR4300, WR841N | Low | **💀 CRITICAL**<br>*(100% Freeze)* | **❌ NO**<br>*(Use Sequential)* |
+| | **Qualcomm IPQ40xx**<br>*(ARM Cortex-A7 Quad)* | Google Wifi (1st Gen), Deco M5 | Moderate | **High Risk**<br>*(~90-100% Load)* | **⚠️ Caution** |
+| **Mid-Range**<br>*(ARMv8 + Crypto Ext)* | **Rockchip RK3399**<br>*(Cortex-A72/A53)* | **NanoPi R4S**, NanoPi R2S, Orange Pi R1 Plus | Negligible | **Moderate Spike**<br>*(~60% CPU)* | **✅ YES**<br>*(Excellent)* |
+| | **Broadcom BCM2711**<br>*(Cortex-A72 Quad)* | **Raspberry Pi 4**, CM4, Banana Pi M5 | Negligible | **Moderate Spike**<br>*(~60% CPU)* | **✅ YES**<br>*(Excellent)* |
+| | **MediaTek Filogic 820**<br>*(Cortex-A53 Dual)* | **Flint 2 (MT6000)**, Xiaomi AX3000 | Negligible | **High Spike**<br>*(~80% CPU)* | **✅ YES**<br>*(Safe)* |
+| | **Qualcomm IPQ807x**<br>*(Cortex-A53 Quad)* | Xiaomi AX3600, Dynalink DL-WRX36 | Negligible | **High Spike**<br>*(~80% CPU)* | **✅ YES**<br>*(Safe)* |
+| **High-End**<br>*(x86 / Flagship ARM)* | **Rockchip RK3588**<br>*(Cortex-A76 Octa)* | **NanoPi R6S**, Orange Pi 5, Banana Pi BPI-M7 | Negligible | **Low Load**<br>*(~20% CPU)* | **✅ YES**<br>*(Best Perf)* |
+| | **Intel N100 / J4125**<br>*(x86_64)* | Mini PC Softrouters, PfSense/OpenWrt boxes | Negligible | **Low Load**<br>*(~20% CPU)* | **✅ YES**<br>*(Best Perf)* |
+| | **MediaTek Filogic 880**<br>*(Cortex-A73 Quad)* | **Banana Pi BPI-R4**, Wi-Fi 7 Routers | Negligible | **Low Load**<br>*(~25% CPU)* | **✅ YES**<br>*(Best Perf)* |
+
+### **2. Sequential Mode (Stability Focused)**
+*One-by-one execution. Zero spikes, flat memory usage. Mandatory for MIPS.*
+
+| Chipset Tier | Common CPU / Architecture | Example Devices | 5 Events (CPU) | 50 Events (CPU) | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy & Budget** | **MediaTek MT7621**<br>*(MIPS 1004Kc)* | Ubiquiti ER-X, Netgear R6220 | Low (<10%) | **Safe (<25%)** | **✅ YES**<br>*(Mandatory)* |
+| | **Qualcomm QCA95xx**<br>*(MIPS 74Kc)* | Archer C7, WDR4300 | Low (<10%) | **Safe (<25%)** | **✅ YES**<br>*(Mandatory)* |
+| | **Qualcomm IPQ40xx**<br>*(ARM Cortex-A7)* | Google Wifi, Deco M5 | Negligible | **Safe (<15%)** | **✅ YES**<br>*(Recommended)* |
+| **Mid-Range** | **All ARMv8 Chips**<br>*(RK3399, BCM2711)* | NanoPi R4S, RPi 4, Flint 2 | Negligible | **Negligible**<br>*(<5%)* | **⚠️ Optional**<br>*(Max Stability)* |
+| **High-End** | **x86 / RK3588** | N100, NanoPi R6S | Negligible | **Negligible**<br>*(<1%)* | **❌ Unnecessary** |
+
+</details>
+
+---
+
 ## 🗑️ Uninstallation
 
 You have two ways to uninstall the tool. Both launch the interactive **Smart Uninstaller** which asks if you want to remove everything or keep your settings.
