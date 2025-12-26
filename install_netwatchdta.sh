@@ -145,7 +145,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v1.3.1"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v1.3.2"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${WHITE}🖥️  System Detected : ${GREEN}$OS_TYPE${NC}"
@@ -560,7 +560,6 @@ SILENT_START=$user_silent_start # Hour to start silent mode (0-23). Default: 23.
 SILENT_END=$user_silent_end # Hour to end silent mode (0-23). Default: 07.
 
 [Discord]
-# Toggle mentions <@UserID> for specific events (YES/NO)
 DISCORD_MENTION_LOCAL=YES # Mention on Local Device Down/Up events. Default is YES.
 DISCORD_MENTION_REMOTE=YES # Mention on Remote Device Down/Up events. Default is YES.
 DISCORD_MENTION_NET=YES # Mention on Internet Connectivity loss/restore. Default is YES.
@@ -1078,7 +1077,7 @@ chmod +x "$INSTALL_DIR/netwatchdta.sh"
 echo -e "\n${CYAN}⚙️  Configuring system service ($SERVICE_TYPE)...${NC}"
 
 if [ "$SERVICE_TYPE" = "PROCD" ]; then
-    # --- OPENWRT PROCD SERVICE (With Interactive Purge Restored) ---
+    # --- OPENWRT PROCD SERVICE (Interactive Edit Added) ---
     cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
 START=99
@@ -1090,6 +1089,7 @@ extra_command "clear" "Clear the log file"
 extra_command "discord" "Test Discord notification"
 extra_command "telegram" "Test Telegram notification"
 extra_command "credentials" "Update Discord/Telegram credentials"
+extra_command "edit" "Edit configuration files"
 extra_command "purge" "Interactive smart uninstaller"
 extra_command "reload" "Reload configuration files"
 
@@ -1123,6 +1123,28 @@ logs() {
 clear() {
     echo "\$(date '+%b %d %H:%M:%S') - [SYSTEM] Log cleared manually." > "/tmp/netwatchdta/nwdta_uptime.log"
     echo "Log file cleared."
+}
+
+edit() {
+    echo ""
+    echo -e "\033[1;36m📝 Configuration Editor\033[0m"
+    while true; do
+        echo "1. Edit Settings (settings.conf)"
+        echo "2. Edit Device IPs (device_ips.conf)"
+        echo "3. Edit Remote IPs (remote_ips.conf)"
+        echo "4. Exit"
+        printf "\033[1mChoice [1-4]: \033[0m"
+        read choice </dev/tty
+        case "\$choice" in
+            1) vi "$INSTALL_DIR/settings.conf"; break ;;
+            2) vi "$INSTALL_DIR/device_ips.conf"; break ;;
+            3) vi "$INSTALL_DIR/remote_ips.conf"; break ;;
+            4) echo "Cancelled."; exit 0 ;;
+            *) echo "Invalid choice." ;;
+        esac
+    done
+    echo ""
+    echo -e "\033[1;33m⚠️  If you made changes, run: /etc/init.d/netwatchdta restart\033[0m"
 }
 
 purge() {
@@ -1273,7 +1295,7 @@ EOF
     systemctl enable netwatchdta >/dev/null 2>&1
     systemctl start netwatchdta
 
-    # --- LINUX CLI WRAPPER (With Interactive Purge Restored) ---
+    # --- LINUX CLI WRAPPER (Updated with Edit Menu & Missing Commands) ---
     CLI_PATH="/usr/local/bin/netwatchdta"
     cat <<EOF > "$CLI_PATH"
 #!/bin/sh
@@ -1281,13 +1303,112 @@ EOF
 INSTALL_DIR="$INSTALL_DIR"
 CONF="\$INSTALL_DIR/settings.conf"
 
+# --- HELPER FUNCTIONS FOR LINUX CLI ---
+load_functions() {
+    if [ -f "\$INSTALL_DIR/netwatchdta.sh" ]; then
+        eval "\$(sed '/^\[.*\]/d' "\$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
+    fi
+}
+get_hw_key() {
+    local seed="nwdta_v1_secure_seed_2025"
+    if [ -f /proc/cpuinfo ]; then 
+        local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
+        [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
+    else 
+        cpu_serial="generic_linux_machine"
+    fi
+    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00" | head -1)
+    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
+}
+get_decrypted_creds() {
+    local vault="\$INSTALL_DIR/.vault.enc"
+    if [ ! -f "\$vault" ]; then return 1; fi
+    local key=\$(get_hw_key)
+    openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$vault" 2>/dev/null
+}
+
 case "\$1" in
     start) systemctl start netwatchdta; echo "Started." ;;
     stop) systemctl stop netwatchdta; echo "Stopped." ;;
     restart) systemctl restart netwatchdta; echo "Restarted." ;;
-    status|check) systemctl status netwatchdta ;;
+    status|check) 
+        if systemctl is-active --quiet netwatchdta; then
+            echo -e "\033[1;32m● netwatchdta is RUNNING.\033[0m"
+        else
+            echo -e "\033[1;31m● netwatchdta is STOPPED.\033[0m"
+        fi
+        systemctl status netwatchdta --no-pager | head -n 5
+        ;;
     logs) tail -n 30 /tmp/netwatchdta/nwdta_uptime.log ;;
-    edit) nano "\$CONF" ;;
+    clear)
+        echo "\$(date '+%b %d %H:%M:%S') - [SYSTEM] Log cleared manually." > "/tmp/netwatchdta/nwdta_uptime.log"
+        echo "Log file cleared."
+        ;;
+    edit) 
+        echo ""
+        echo -e "\033[1;36m📝 Configuration Editor\033[0m"
+        while true; do
+            echo "1. Edit Settings (settings.conf)"
+            echo "2. Edit Device IPs (device_ips.conf)"
+            echo "3. Edit Remote IPs (remote_ips.conf)"
+            echo "4. Exit"
+            printf "\033[1mChoice [1-4]: \033[0m"
+            read choice </dev/tty
+            case "\$choice" in
+                1) nano "\$INSTALL_DIR/settings.conf"; break ;;
+                2) nano "\$INSTALL_DIR/device_ips.conf"; break ;;
+                3) nano "\$INSTALL_DIR/remote_ips.conf"; break ;;
+                4) echo "Cancelled."; exit 0 ;;
+                *) echo "Invalid choice." ;;
+            esac
+        done
+        echo ""
+        echo -e "\033[1;33m⚠️  If you made changes, run: netwatchdta restart\033[0m"
+        ;;
+    discord)
+        load_functions
+        local decrypted=\$(get_decrypted_creds)
+        decrypted=\$(echo "\$decrypted" | tr -d '\r')
+        local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
+        if [ -n "\$webhook" ]; then
+            echo "Sending Discord test..."
+            curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
+            echo "Sent."
+        else
+            echo "No Discord Webhook configured or vault locked."
+        fi
+        ;;
+    telegram)
+        load_functions
+        local decrypted=\$(get_decrypted_creds)
+        decrypted=\$(echo "\$decrypted" | tr -d '\r')
+        local token=\$(echo "\$decrypted" | cut -d'|' -f3)
+        local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
+        if [ -n "\$token" ]; then
+            echo "Sending Telegram test..."
+            curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
+            echo "Sent."
+        else
+            echo "No Telegram Token configured or vault locked."
+        fi
+        ;;
+    credentials)
+        echo ""
+        echo -e "\033[1;33m🔐 Credential Manager\033[0m"
+        echo "1. Change Discord Credentials"
+        echo "2. Change Telegram Credentials"
+        echo "3. Change Both"
+        printf "Choice [1-3]: "
+        read c_choice </dev/tty
+        
+        load_functions
+        local current=\$(get_decrypted_creds); current=\$(echo "\$current" | tr -d '\r')
+        local d_hook=\$(echo "\$current" | cut -d'|' -f1); local d_uid=\$(echo "\$current" | cut -d'|' -f2); local t_tok=\$(echo "\$current" | cut -d'|' -f3); local t_chat=\$(echo "\$current" | cut -d'|' -f4)
+        if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "3" ]; then printf "New Discord Webhook: "; read d_hook </dev/tty; printf "New Discord User ID: "; read d_uid </dev/tty; fi
+        if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "3" ]; then printf "New Telegram Token: "; read t_tok </dev/tty; printf "New Telegram Chat ID: "; read t_chat </dev/tty; fi
+        local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}"; local vault="\$INSTALL_DIR/.vault.enc"; local key=\$(get_hw_key)
+        if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then echo -e "\033[1;32m✅ Credentials updated.\033[0m"; systemctl restart netwatchdta; else echo -e "\033[1;31m❌ Encryption failed.\033[0m"; fi
+        ;;
     purge) 
         echo ""
         echo -e "\033[1;31m=======================================================\033[0m"
@@ -1334,7 +1455,7 @@ case "\$1" in
                 ;;
         esac
         ;;
-    *) echo "Usage: netwatchdta {start|stop|restart|status|logs|edit|purge}" ;;
+    *) echo "Usage: netwatchdta {start|stop|restart|status|logs|clear|discord|telegram|credentials|edit|purge}" ;;
 esac
 EOF
     chmod +x "$CLI_PATH"
@@ -1368,8 +1489,7 @@ if [ "$SERVICE_TYPE" = "PROCD" ]; then
     echo -e "  Logs             : ${YELLOW}/etc/init.d/netwatchdta logs${NC}"
     echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
     echo -e "  Manage Creds     : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
-    echo -e "  Edit Settings    : ${CYAN}$CONFIG_FILE${NC}"
-    echo -e "  Edit IP List     : ${CYAN}$IP_LIST_FILE${NC}"
+    echo -e "  Edit Settings    : ${YELLOW}/etc/init.d/netwatchdta edit${NC}"
     echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
 else
     echo -e "  Status           : ${YELLOW}netwatchdta check${NC}"
