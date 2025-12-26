@@ -148,6 +148,26 @@ Now you can view the live monitor logs directly from your browser by going to **
 
 ---
 
+### 📊 RAM & CPU Usage Scaling (Stress Test)
+*Estimates based on simultaneous failure events triggering alerts.*
+
+| Simultaneous Failures | OS Environment | Network Tool | Shell | Est. CPU Usage (Peak) | Est. RAM Usage (Total) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **5 Events** | **OpenWrt** | `uclient-fetch` | `ash` | Low (< 5%) | **~1.5 - 2.5 MB** |
+| | **Linux** | `curl` | `bash` | Low (< 10%) | **~15 - 20 MB** |
+| | | | | | |
+| **20 Events** | **OpenWrt** | `uclient-fetch` | `ash` | Moderate (~25-40%) | **~5 - 8 MB** |
+| | **Linux** | `curl` | `bash` | Moderate (~20-30%) | **~60 - 80 MB** |
+| | | | | | |
+| **50 Events** | **OpenWrt** | `uclient-fetch` | `ash` | **Critical Spike (100%)*** | **~15 - 25 MB** |
+| | **Linux** | `curl` | `bash` | High Spike (~70-80%) | **~150 - 200 MB** |
+
+> **\*Note on OpenWrt CPU:** The 100% CPU spike during 50 simultaneous events is due to the heavy math required for 50 concurrent TLS (HTTPS) handshakes. While RAM usage remains safe/low due to shared libraries, the processor may be momentarily saturated, potentially causing brief web interface lag.
+
+> **Note on Linux RAM:** Linux memory usage is significantly higher because `bash` and `curl` do not share memory resources as efficiently as `ash` and `uclient-fetch` do on embedded systems.
+
+---
+
 ## 🗑️ Uninstallation
 
 You have two ways to uninstall the tool. Both launch the interactive **Smart Uninstaller** which asks if you want to remove everything or keep your settings.
