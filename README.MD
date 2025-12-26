@@ -12,8 +12,8 @@ Originally designed for OpenWrt routers, **v4.x** has been re-engineered as a **
 
 * **🦄 Universal Installer:** One script works on OpenWrt routers, Raspberry Pis, VPSs, and Desktop Linux.
 * **🧠 Smart Engine:**
-* **OpenWrt:** Uses `uclient-fetch` and minimal RAM logic (~7KB footprint).
-* **Linux:** Uses `curl` and `systemd` for maximum stability.
+     * **OpenWrt:** Uses `uclient-fetch` and minimal RAM logic.
+     * **Linux:** Uses `curl` and `systemd` for maximum stability.
 
 
 * **🔔 Dual Notifications:** Send alerts to **Discord** (with rich embeds) and **Telegram** simultaneously or selectively.
