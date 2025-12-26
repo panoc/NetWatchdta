@@ -5,7 +5,16 @@
  <img src="https://img.shields.io/badge/Network-Monitoring%20%26%20Telegram-7289da?style=flat-square&logo=discord&logoColor=white">
   <img src="https://img.shields.io/badge/Vault-AES--256-red?style=flat-square&logo=keepassxc&logoColor=white">
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square">
-![Daemon](https://img.shields.io/badge/Service-Monitoring%20Daemon-orange?style=flat-square&logo=linux&logoColor=white)
+
+[Network Monitor](https://img.shields.io/badge/Network-Monitor-brightgreen?style=flat-square&logo=eye&logoColor=white)
+![OS](https://img.shields.io/badge/OS-Linux%20%7C%20OpenWrt-1272ba?style=flat-square&logo=openwrt&logoColor=white)
+![Alerts](https://img.shields.io/badge/Alerts-Discord%20%26%20Telegram-7289da?style=flat-square&logo=discord&logoColor=white)
+![Vault](https://img.shields.io/badge/Vault-AES--256-red?style=flat-square&logo=keepassxc&logoColor=white)
+![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)
+
+> **Network Monitor with Real Time Alerts for OpenWrt & Linux**
+
+
 </p>
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
