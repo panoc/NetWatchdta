@@ -80,6 +80,9 @@ Once installed, use the CLI commands to manage the service.
 
 ### 🎮 Service Commands
 
+<details>
+<summary><strong>⌨️ List of all available commands</strong></summary>
+
 | Action | Linux Command | OpenWrt Command | Description |
 | --- | --- | --- | --- |
 | **Check Status** | `netwatchdta check` | `/etc/init.d/netwatchdta check` | Shows if the service is running or stopped. |
@@ -91,32 +94,7 @@ Once installed, use the CLI commands to manage the service.
 | **Telegram Test** | `netwatchdta telegram` | `/etc/init.d/netwatchdta telegram` | Sends a manual test alert to Telegram. |
 | **Credentials** | `netwatchdta credentials` | `/etc/init.d/netwatchdta credentials` | Re-enter/Update API tokens & Webhooks. |
 | **Uninstall** | `netwatchdta purge` | `/etc/init.d/netwatchdta purge` | Launch the interactive uninstaller. |
-
-### ⚙️ Configuration Settings (`settings.conf`)
-
-Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/settings.conf` (OpenWrt).
-
-| Category | Setting | Description |
-| --- | --- | --- |
-| **General** | `ROUTER_NAME` | The name displayed in all notifications (e.g., "Home Router"). |
-|  | `FETCH_TOOL` | **AUTO** (Default), `CURL`, `UCLIENT`, or `WGET`. Controls which tool sends alerts. |
-|  | `EXEC_METHOD` | `1` = Parallel (Fast), `2` = Sequential (Low RAM). Auto-detected on install. |
-| **Notifications** | `DISCORD_ENABLE` | `YES`/`NO`. Master switch for Discord alerts. |
-|  | `TELEGRAM_ENABLE` | `YES`/`NO`. Master switch for Telegram alerts. |
-|  | `SILENT_ENABLE` | `YES`/`NO`. If YES, notifications are muted during silent hours. |
-|  | `SILENT_START` / `END` | Start/End hour for silent mode (e.g., `23` to `07`). |
-| **Discord Mentions** | `DISCORD_MENTION_...` | Toggles `@User` mentions for specific events (Local, Remote, Net, Heartbeat). |
-| **Heartbeat** | `HEARTBEAT` | `YES`/`NO`. Sends a periodic "I am alive" message. |
-|  | `HB_INTERVAL` | Seconds between heartbeats (Default `86400` = 24 Hours). |
-|  | `HB_TARGET` | `DISCORD`, `TELEGRAM`, or `BOTH`. |
-|  | `HB_START_HOUR` | The hour (0-23) the heartbeat should try to send (e.g., `12` for Noon). |
-| **Monitoring** | `EXT_...` | Settings for WAN (Internet) monitoring (IPs, Interval, Thresholds). |
-|  | `DEV_...` | Settings for Local Device monitoring (from `device_ips.conf`). |
-|  | `REM_...` | Settings for Remote Server monitoring (from `remote_ips.conf`). |
-| **Performance** | `CPU_GUARD_THRESHOLD` | Pauses checks if system load exceeds this value (Default `2.0`). |
-|  | `RAM_GUARD_MIN_FREE` | Pauses checks if free RAM is below this (KB) (Default `4096`). |
-
-
+</details>
 
 ### ⚙️ Configuration Settings (`settings.conf`)
 
