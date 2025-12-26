@@ -223,8 +223,6 @@ opkg update && opkg install luci-app-commands
 Now you can view the live monitor logs directly from your browser by going to **System** ➡️ **Custom Commands**!
 </details>
 
----
-
 ### 📊 RAM & CPU Usage Scaling
 
 <details>
