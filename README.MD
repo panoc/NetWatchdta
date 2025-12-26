@@ -123,7 +123,6 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/settings.conf` (OpenWrt).
 
 <details>
-<details>
 <summary><strong>📝 List of all available settings</strong></summary>
 
 | Setting | Default | Description |
