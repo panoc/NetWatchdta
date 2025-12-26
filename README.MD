@@ -105,6 +105,7 @@ Once installed, use the CLI commands to manage the service.
 | **Discord Test** | `netwatchdta discord` | `/etc/init.d/netwatchdta discord` | Sends a manual test alert to Discord. |
 | **Telegram Test** | `netwatchdta telegram` | `/etc/init.d/netwatchdta telegram` | Sends a manual test alert to Telegram. |
 | **Credentials** | `netwatchdta credentials` | `/etc/init.d/netwatchdta credentials` | Re-enter/Update API tokens & Webhooks. |
+| **Edit settings** | `netwatchdta edit` | `/etc/init.d/netwatchdta edit` | Edit settings menu. |
 | **Uninstall** | `netwatchdta purge` | `/etc/init.d/netwatchdta purge` | Launch the interactive uninstaller. |
 </details>
 
