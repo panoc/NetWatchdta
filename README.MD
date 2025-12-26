@@ -109,44 +109,43 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `ROUTER_NAME` | `Router` | The name displayed in the title of all notifications. |
-| `FETCH_TOOL` | `AUTO` | **AUTO**, `CURL`, `UCLIENT`, or `WGET`. Controls which tool sends alerts. |
-| `EXEC_METHOD` | `Auto` | `1` = Parallel (Fast), `2` = Sequential (Low RAM). Auto-detected on install. |
-| `DISCORD_WEBHOOK_URL` | *Empty* | The full Webhook URL provided by Discord. |
-| `TELEGRAM_BOT_TOKEN` | *Empty* | The API Token provided by @BotFather. |
-| `TELEGRAM_CHAT_ID` | *Empty* | The Chat ID (User or Group) for Telegram messages. |
-| `DISCORD_ENABLE` | `NO` | Master switch for Discord alerts (`YES`/`NO`). |
-| `TELEGRAM_ENABLE` | `NO` | Master switch for Telegram alerts (`YES`/`NO`). |
-| `SILENT_ENABLE` | `NO` | If `YES`, notifications are paused during specific hours. |
-| `SILENT_START` | `23` | Hour to **start** silence (0-23). |
-| `SILENT_END` | `07` | Hour to **end** silence (0-23). |
-| `DISCORD_USER_ID` | *Empty* | Your numeric Discord User ID. Required for mentions. |
-| `DISCORD_MENTION_LOCAL` | `NO` | Mention on Local Device events (`YES`/`NO`). |
-| `DISCORD_MENTION_REMOTE`| `NO` | Mention on Remote Server events (`YES`/`NO`). |
-| `DISCORD_MENTION_NET` | `NO` | Mention on Internet (WAN) events (`YES`/`NO`). |
-| `DISCORD_MENTION_HEARTBEAT`| `NO` | Mention inside the daily Heartbeat report (`YES`/`NO`). |
-| `HEARTBEAT` | `NO` | Enables the periodic "I am still running" report. |
-| `HB_INTERVAL` | `86400` | Seconds between heartbeats (86400s = 24 Hours). |
-| `HB_TARGET` | `DISCORD` | `DISCORD`, `TELEGRAM`, or `BOTH`. |
-| `HB_START_HOUR` | `12` | The hour (0-23) the heartbeat aligns to (e.g., `12` for Noon). |
-| `EXT_CHECK_ENABLE` | `YES` | Enables monitoring of the external internet connection. |
-| `EXT_IP1` | `8.8.8.8` | Primary public IP to ping (Google DNS). |
-| `EXT_IP2` | `1.1.1.1` | Secondary public IP to ping (Cloudflare DNS). |
-| `EXT_INTERVAL` | `10` | Seconds between internet checks. |
-| `EXT_FAIL_THRESHOLD` | `3` | Consecutive failed pings before marking Internet as DOWN. |
-| `DEV_CHECK_ENABLE` | `NO` | Enables monitoring of devices in `device_ips.conf`. |
-| `DEV_CHECK_INTERVAL` | `60` | Seconds between checks for local devices. |
-| `DEV_FAIL_THRESHOLD` | `3` | Consecutive failed pings before marking a Device as DOWN. |
-| `REM_CHECK_ENABLE` | `NO` | Enables monitoring of servers in `remote_ips.conf`. |
-| `REM_CHECK_INTERVAL` | `60` | Seconds between checks for remote servers. |
-| `REM_FAIL_THRESHOLD` | `3` | Consecutive failed pings before marking a Server as DOWN. |
-| `CPU_GUARD_ENABLE` | `YES` | Enables pausing checks if CPU load is too high. |
-| `CPU_GUARD_THRESHOLD` | `2.0` | System load value (1 min avg) to trigger pause. |
-| `RAM_GUARD_ENABLE` | `YES` | Enables pausing checks if RAM is dangerously low. |
-| `RAM_GUARD_MIN_FREE` | `4096` | Minimum free RAM (in KB) required to run checks. |
-| `LOG_ENABLE` | `YES` | Enables writing events to `netwatchdta.log`. |
-| `LOG_MAX_SIZE` | `512` | Max size of the log file in KB before rotation. |
-| `DEBUG_MODE` | `NO` | Enables verbose output to the console. |
+| `ROUTER_NAME` | The name displayed in the title of all notifications. |
+| `FETCH_TOOL` | **AUTO**, `CURL`, `UCLIENT`, or `WGET`. Controls which tool sends alerts. |
+| `EXEC_METHOD` | `1` = Parallel (Fast), `2` = Sequential (Low RAM). Auto-detected on install. |
+| `LOG_ENABLE` | Enables writing events to `netwatchdta.log`. |
+| `LOG_MAX_SIZE` | Max size of the log file in KB before rotation. |
+| `DISCORD_ENABLE` | Master switch for Discord alerts (`YES`/`NO`). |
+| `TELEGRAM_ENABLE` | Master switch for Telegram alerts (`YES`/`NO`). |
+| `SILENT_ENABLE` | If `YES`, notifications are paused during specific hours. |
+| `SILENT_START` | Hour to **start** silence (0-23). |
+| `SILENT_END` | Hour to **end** silence (0-23). |
+| `DISCORD_MENTION_LOCAL` | Mention on Local Device events (`YES`/`NO`). |
+| `DISCORD_MENTION_REMOTE`| Mention on Remote Server events (`YES`/`NO`). |
+| `DISCORD_MENTION_NET` | Mention on Internet (WAN) events (`YES`/`NO`). |
+| `DISCORD_MENTION_HEARTBEAT`| Mention inside the daily Heartbeat report (`YES`/`NO`). |
+| `CPU_GUARD_THRESHOLD` | System load value (1 min avg) to trigger pause. |
+| `RAM_GUARD_MIN_FREE` | Minimum free RAM (in KB) required to run checks. |
+| `HEARTBEAT` | Enables the periodic "I am still running" report. |
+| `HB_INTERVAL` | Seconds between heartbeats (86400s = 24 Hours). |
+| `HB_TARGET` | `DISCORD`, `TELEGRAM`, or `BOTH`. |
+| `HB_START_HOUR` | The hour (0-23) the heartbeat aligns to (e.g., `12` for Noon). |
+| `EXT_CHECK_ENABLE` |  Enables monitoring of the external internet connection. |
+| `EXT_IP1` | Primary public IP to ping (Google DNS). |
+| `EXT_IP2` | Secondary public IP to ping (Cloudflare DNS). |
+| `EXT_SCAN_INTERVAL` | Seconds between internet checks. |
+| `EXT_FAIL_THRESHOLD` | Consecutive failed pings before marking Internet as DOWN. |
+| `EXT_PING_COUNT` | Number of packets per internet check. |
+| `EXT_PING_TIMEOUT` | Seconds to wait for ping response. |
+| `DEV_CHECK_ENABLE` | Enables monitoring of devices in `device_ips.conf`. |
+| `DEV_CHECK_INTERVAL` | Seconds between checks for local devices. |
+| `DEV_FAIL_THRESHOLD` | Consecutive failed pings before marking a Device as DOWN. |
+| `DEV_PING_COUNT` | Number of packets per device check. |
+| `DEV_PING_TIMEOUT` | Seconds to wait for device ping response. |
+| `REM_CHECK_ENABLE` | Enables monitoring of servers in `remote_ips.conf`. |
+| `REM_CHECK_INTERVAL` | Seconds between checks for remote servers. |
+| `REM_FAIL_THRESHOLD` | Consecutive failed pings before marking a Server as DOWN. |
+| `REM_PING_COUNT | Number of packets per remote check. |
+| `REM_PING_TIMEOUT | Seconds to wait for remote ping response. |
 </details>
 
 ---
