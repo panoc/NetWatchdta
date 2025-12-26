@@ -5,6 +5,7 @@
  <img src="https://img.shields.io/badge/Network-Monitoring%20%26%20Telegram-7289da?style=flat-square&logo=discord&logoColor=white">
   <img src="https://img.shields.io/badge/Vault-AES--256-red?style=flat-square&logo=keepassxc&logoColor=white">
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square">
+![Daemon](https://img.shields.io/badge/Service-Monitoring%20Daemon-orange?style=flat-square&logo=linux&logoColor=white)
 </p>
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
