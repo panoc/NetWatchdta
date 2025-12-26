@@ -5,6 +5,7 @@
   <img src="https://img.shields.io/badge/Vault-AES--256-red?style=flat-square&logo=keepassxc&logoColor=white">
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square">
 </p>
+
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
 
 **NetWatchdta** is a lightweight, robust, and highly configurable network monitoring script. It continuously monitors your Internet connection (WAN), Local Devices (LAN), and Remote Servers, sending real-time alerts via **Discord** and **Telegram**.
