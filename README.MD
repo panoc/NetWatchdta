@@ -150,12 +150,12 @@ Once installed, use the CLI commands to manage the service.
 </details>
 <br>
 
-### ⚙️ Configuration Settings (`settings.conf`)
+### Configuration Settings (`settings.conf`)
 
 Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/settings.conf` (OpenWrt).
 
 <details>
-<summary><strong>📝 List of all available settings</strong></summary>
+<summary><strong>List of all available settings</strong></summary>
 
 | Setting | Description |
 | :--- | :--- |
