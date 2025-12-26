@@ -32,7 +32,7 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 ## 🖥️ Supported Operating Systems
 
 <details>
-<summary><strong>🐧NetWatchdta v4.x automatically adapts to the underlying OS.</strong></summary>
+<summary><strong>NetWatchdta v4.x automatically adapts to the underlying OS.</strong></summary>
 
 | Category | Status | Supported Distributions | Notes |
 | --- | --- | --- | --- |
@@ -274,7 +274,7 @@ Now you can view the live monitor logs directly from your browser by going to **
 <br>
 
 <details>
-<summary><strong>💡 Click to expand: Hardware Recommendations & Selection Guide</strong></summary>
+<summary><strong>Click to expand: Hardware Recommendations & Selection Guide</strong></summary>
 
 ### 🎯 Quick Decision Matrix
 *Choose the right hardware based on your intended usage.*
