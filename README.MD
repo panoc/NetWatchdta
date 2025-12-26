@@ -22,7 +22,7 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 * **🌙 Silent Mode:** Mute alerts during specific hours (e.g., sleeping time), but keep logging them to the buffer.
 * **💓 Heartbeat:** Periodic "I am alive" messages to confirm the system is running.
 * **🌍 Multi-Tier Monitoring:**
-     * **Internet (WAN):** Checks external IPs (Cloudflare/Google).
+     * **Internet (WAN):** Checks external IPs (Cloudflare/Google/Custom).
      * **Local (LAN):** Monitors devices on your network (e.g., NAS, Cameras).
      * **Remote:** Monitors external servers (only checks if WAN is UP).
 <br>
