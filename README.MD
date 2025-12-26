@@ -2,9 +2,10 @@
 <p align="left">
   <img src="https://img.shields.io/badge/OS-OpenWrt%20%7C%20Linux-1272ba?style=flat-squarelogo=openwrt&logoColor=white">
   <img src="https://img.shields.io/badge/Alerts-Discord%20%26%20Telegram-7289da?style=flat-square&logo=discord&logoColor=white">
-  <img src="https://img.shields.io/badge/Monitoring_and%20%26%20Logs-7289da?style=flat-square&logo=network&logoColor=white">
+  <img src="https://img.shields.io/badge/Network-Monitoring%20and%20Logs-orange?style=flat-square&logo=activity&logoColor=white">
   <img src="https://img.shields.io/badge/Vault-AES--256-red?style=flat-square&logo=keepassxc&logoColor=white">
   <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square">
+![Network](https://img.shields.io/badge/Network-Monitoring%20and%20Logs-orange?style=flat-square&logo=activity)
 </p>
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
