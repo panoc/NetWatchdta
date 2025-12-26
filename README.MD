@@ -287,8 +287,8 @@ You have two ways to uninstall the tool. Both launch the interactive **Smart Uni
 sudo netwatchdta purge
 ```
 
-```bash 
 * **OpenWrt:** 
+```bash 
 /etc/init.d/netwatchdta purge
 ```
 
