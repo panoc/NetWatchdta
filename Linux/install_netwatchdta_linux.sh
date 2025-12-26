@@ -145,7 +145,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v4.3 (Grand Unified)"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v4.3.1 (Grand Unified)"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${WHITE}🖥️  System Detected : ${GREEN}$OS_TYPE${NC}"
@@ -1072,13 +1072,13 @@ while true; do
 done
 EOF
 chmod +x "$INSTALL_DIR/netwatchdta.sh"
-# ==============================================================================
+## ==============================================================================
 #  STEP 7: SERVICE CONFIGURATION (MULTI-OS)
 # ==============================================================================
 echo -e "\n${CYAN}⚙️  Configuring system service ($SERVICE_TYPE)...${NC}"
 
 if [ "$SERVICE_TYPE" = "PROCD" ]; then
-    # --- OPENWRT PROCD SERVICE ---
+    # --- OPENWRT PROCD SERVICE (With Interactive Purge Restored) ---
     cat <<EOF > "$SERVICE_PATH"
 #!/bin/sh /etc/rc.common
 START=99
@@ -1123,89 +1123,6 @@ logs() {
 clear() {
     echo "\$(date '+%b %d %H:%M:%S') - [SYSTEM] Log cleared manually." > "/tmp/netwatchdta/nwdta_uptime.log"
     echo "Log file cleared."
-}
-
-load_functions() {
-    if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
-        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
-    fi
-}
-
-get_hw_key() {
-    local seed="nwdta_v1_secure_seed_2025"
-    # FIXED: Robust parsing for all OpenWrt variants
-    local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
-    [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
-    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
-    [ -z "\$mac_addr" ] && mac_addr="00:00:00:00:00:00"
-    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
-}
-
-get_decrypted_creds() {
-    local vault="$INSTALL_DIR/.vault.enc"
-    if [ ! -f "\$vault" ]; then return 1; fi
-    local key=\$(get_hw_key)
-    openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$vault" 2>/dev/null
-}
-
-discord() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
-    if [ -n "\$webhook" ]; then
-        echo "Sending Discord test..."
-        # Reusing the Universal Safe Fetch Logic Here
-        if command -v curl >/dev/null 2>&1; then
-            curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
-        elif command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --no-check-certificate --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" -O /dev/null >/dev/null 2>&1
-        fi
-        echo "Sent."
-    else
-        echo "No Discord Webhook configured or vault locked."
-    fi
-}
-
-telegram() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local token=\$(echo "\$decrypted" | cut -d'|' -f3)
-    local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
-    if [ -n "\$token" ]; then
-        echo "Sending Telegram test..."
-        if command -v curl >/dev/null 2>&1; then
-             curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
-        elif command -v uclient-fetch >/dev/null 2>&1; then
-             uclient-fetch --no-check-certificate --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" -O /dev/null >/dev/null 2>&1
-        fi
-        echo "Sent."
-    else
-        echo "No Telegram Token configured or vault locked."
-    fi
-}
-
-credentials() {
-    echo ""
-    echo -e "\033[1;33m🔐 Credential Manager\033[0m"
-    echo "1. Change Discord Credentials"
-    echo "2. Change Telegram Credentials"
-    echo "3. Change Both"
-    printf "Choice [1-3]: "
-    read c_choice </dev/tty
-    
-    load_functions
-    local current=\$(get_decrypted_creds); current=\$(echo "\$current" | tr -d '\r')
-    local d_hook=\$(echo "\$current" | cut -d'|' -f1); local d_uid=\$(echo "\$current" | cut -d'|' -f2); local t_tok=\$(echo "\$current" | cut -d'|' -f3); local t_chat=\$(echo "\$current" | cut -d'|' -f4)
-    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "3" ]; then printf "New Discord Webhook: "; read d_hook </dev/tty; printf "New Discord User ID: "; read d_uid </dev/tty; fi
-    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "3" ]; then printf "New Telegram Token: "; read t_tok </dev/tty; printf "New Telegram Chat ID: "; read t_chat </dev/tty; fi
-    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}"; local vault="$INSTALL_DIR/.vault.enc"; local key=\$(get_hw_key)
-    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then echo -e "\033[1;32m✅ Credentials updated.\033[0m"; /etc/init.d/netwatchdta restart; else echo -e "\033[1;31m❌ Encryption failed.\033[0m"; fi
-}
-
-reload() {
-    /etc/init.d/netwatchdta restart
 }
 
 purge() {
@@ -1254,6 +1171,83 @@ purge() {
             ;;
     esac
 }
+
+load_functions() {
+    if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
+        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
+    fi
+}
+
+get_hw_key() {
+    local seed="nwdta_v1_secure_seed_2025"
+    local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
+    [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
+    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
+    [ -z "\$mac_addr" ] && mac_addr="00:00:00:00:00:00"
+    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
+}
+
+get_decrypted_creds() {
+    local vault="$INSTALL_DIR/.vault.enc"
+    if [ ! -f "\$vault" ]; then return 1; fi
+    local key=\$(get_hw_key)
+    openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$vault" 2>/dev/null
+}
+
+discord() {
+    load_functions
+    local decrypted=\$(get_decrypted_creds)
+    decrypted=\$(echo "\$decrypted" | tr -d '\r')
+    local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
+    if [ -n "\$webhook" ]; then
+        echo "Sending Discord test..."
+        if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
+            uclient-fetch --no-check-certificate --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" -O /dev/null >/dev/null 2>&1
+        else
+            curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
+        fi
+        echo "Sent."
+    else
+        echo "No Discord Webhook configured or vault locked."
+    fi
+}
+
+telegram() {
+    load_functions
+    local decrypted=\$(get_decrypted_creds)
+    decrypted=\$(echo "\$decrypted" | tr -d '\r')
+    local token=\$(echo "\$decrypted" | cut -d'|' -f3)
+    local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
+    if [ -n "\$token" ]; then
+        echo "Sending Telegram test..."
+        if command -v uclient-fetch >/dev/null 2>&1; then
+             uclient-fetch --no-check-certificate --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" -O /dev/null >/dev/null 2>&1
+        else
+             curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
+        fi
+        echo "Sent."
+    else
+        echo "No Telegram Token configured or vault locked."
+    fi
+}
+
+credentials() {
+    echo ""
+    echo -e "\033[1;33m🔐 Credential Manager\033[0m"
+    echo "1. Change Discord Credentials"
+    echo "2. Change Telegram Credentials"
+    echo "3. Change Both"
+    printf "Choice [1-3]: "
+    read c_choice </dev/tty
+    
+    load_functions
+    local current=\$(get_decrypted_creds); current=\$(echo "\$current" | tr -d '\r')
+    local d_hook=\$(echo "\$current" | cut -d'|' -f1); local d_uid=\$(echo "\$current" | cut -d'|' -f2); local t_tok=\$(echo "\$current" | cut -d'|' -f3); local t_chat=\$(echo "\$current" | cut -d'|' -f4)
+    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "3" ]; then printf "New Discord Webhook: "; read d_hook </dev/tty; printf "New Discord User ID: "; read d_uid </dev/tty; fi
+    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "3" ]; then printf "New Telegram Token: "; read t_tok </dev/tty; printf "New Telegram Chat ID: "; read t_chat </dev/tty; fi
+    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}"; local vault="$INSTALL_DIR/.vault.enc"; local key=\$(get_hw_key)
+    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then echo -e "\033[1;32m✅ Credentials updated.\033[0m"; /etc/init.d/netwatchdta restart; else echo -e "\033[1;31m❌ Encryption failed.\033[0m"; fi
+}
 EOF
     chmod +x "$SERVICE_PATH"
     "$SERVICE_PATH" enable >/dev/null 2>&1
@@ -1279,8 +1273,7 @@ EOF
     systemctl enable netwatchdta >/dev/null 2>&1
     systemctl start netwatchdta
 
-    # --- LINUX CLI WRAPPER ---
-    # Creates 'netwatchdta' command to mimic OpenWrt's init.d functionality
+    # --- LINUX CLI WRAPPER (With Interactive Purge Restored) ---
     CLI_PATH="/usr/local/bin/netwatchdta"
     cat <<EOF > "$CLI_PATH"
 #!/bin/sh
@@ -1296,17 +1289,57 @@ case "\$1" in
     logs) tail -n 30 /tmp/netwatchdta/nwdta_uptime.log ;;
     edit) nano "\$CONF" ;;
     purge) 
-        echo "Removing..."; systemctl stop netwatchdta; systemctl disable netwatchdta
-        rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
-        rm -rf "\$INSTALL_DIR" /tmp/netwatchdta
-        systemctl daemon-reload; echo "Done." ;;
+        echo ""
+        echo -e "\033[1;31m=======================================================\033[0m"
+        echo -e "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
+        echo -e "\033[1;31m=======================================================\033[0m"
+        echo ""
+        echo -e "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
+        echo -e "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
+        echo -e "\033[1;37m3.\033[0m Cancel"
+        printf "\033[1mChoice [1-3]: \033[0m"
+        read choice </dev/tty
+        
+        case "\$choice" in
+            1)
+                echo ""
+                echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+                systemctl stop netwatchdta; systemctl disable netwatchdta
+                echo -e "\033[1;33m🧹 Cleaning up /tmp and files...\033[0m"
+                rm -rf "/tmp/netwatchdta"
+                rm -rf "\$INSTALL_DIR"
+                echo -e "\033[1;33m🔥 Removing service...\033[0m"
+                rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
+                systemctl daemon-reload
+                echo ""
+                echo -e "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
+                ;;
+            2)
+                echo ""
+                echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+                systemctl stop netwatchdta; systemctl disable netwatchdta
+                echo -e "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
+                rm -rf "/tmp/netwatchdta"
+                echo -e "\033[1;33m🗑️  Removing core script...\033[0m"
+                rm -f "\$INSTALL_DIR/netwatchdta.sh"
+                echo -e "\033[1;33m🔥 Removing service...\033[0m"
+                rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
+                systemctl daemon-reload
+                echo ""
+                echo -e "\033[1;32m✅ Logic removed. Settings preserved in \$INSTALL_DIR\033[0m"
+                ;;
+            *)
+                echo -e "\033[1;31m❌ Purge cancelled.\033[0m"
+                exit 0
+                ;;
+        esac
+        ;;
     *) echo "Usage: netwatchdta {start|stop|restart|status|logs|edit|purge}" ;;
 esac
 EOF
     chmod +x "$CLI_PATH"
     echo -e "${GREEN}✅ CLI Command installed: 'netwatchdta'${NC}"
 fi
-
 # ==============================================================================
 #  STEP 8: FINAL SUCCESS MESSAGE
 # ==============================================================================
