@@ -350,10 +350,10 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 ### 4. 🔔 Notification Phase (The Hybrid Engine)
 *Resource usage depends on the **Execution Mode** (Parallel vs. Queue) and the number of destinations.*
 
-**A. Single Destination (Discord OR Telegram)**
-*Scenario: Sending alerts to one platform.*
-**B. Dual Destination (Discord AND Telegram)**
-*Scenario: Sending alerts to BOTH platforms for every event.*
+**A. Single Destination (Discord OR Telegram)** *Scenario: Sending alerts to one platform.*
+
+**B. Dual Destination (Discord AND Telegram)** *Scenario: Sending alerts to BOTH platforms for every event.*
+
 *Logic: The script sends sequentially (Discord → Wait → Telegram), so RAM usage is based on the single peak of the active tool, but Execution Time doubles.*
 
 #### **Method 1: Parallel Mode (High Performance)**
