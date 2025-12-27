@@ -356,17 +356,17 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 #### **Method 1: Parallel Mode (High Performance)**
 *Auto-selected for RAM > 256MB. All alerts send instantly.*
 
-| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time  Discord & Telegram | Execution Time Discord & Telegram|
 | :--- | :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1 |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1 | ~2s |
 | **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~1s |
-| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | **~2s** |
+| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | **~2s** | **~4s** |
 
 #### **Method 2: Queue Mode (Low RAM / Safe)**
 *Auto-selected for RAM < 256MB. Alerts wait in line.*
 *Formula: `(1 Active Transfer) + (N-1 Waiting Shells)`*
 
-| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time | Execution Time dual Destination|
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time  Discord & Telegram | Execution Time Discord & Telegram|
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s | ~10s |
 | **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~5s | ~10s |
@@ -383,8 +383,8 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 
 | Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
 | :--- | :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
-| **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~2s |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s | ~2s |
+| **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~2s | ~2s |
 | **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | **~4s** |
 
 #### **Method 2: Queue Mode (Low RAM / Safe)**
