@@ -381,7 +381,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 #### **Method 1: Parallel Mode (High Performance)**
 *Auto-selected for RAM > 256MB. All alerts start immediately.*
 
-| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
 | :--- | :--- | :--- | :--- | :--- |
 | **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
 | **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~2s |
@@ -390,7 +390,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 #### **Method 2: Queue Mode (Low RAM / Safe)**
 *Critical for preventing crashes on weak devices.*
 
-| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
 | :--- | :--- | :--- | :--- | :--- |
 | **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
 | **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~10s |
