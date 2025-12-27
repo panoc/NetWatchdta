@@ -73,27 +73,27 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 
 ### **B. Dual Destination (Discord AND Telegram)**
 *Scenario: Sending alerts to BOTH platforms for every event.*
-*Logic: The script sends sequentially (Discord → Wait → Telegram), so RAM does not double, but Time doubles.*
+*Logic: The script sends sequentially (Discord → Wait → Telegram), so RAM usage is based on the single peak of the active tool, but Execution Time doubles.*
 
 #### **Method 1: Parallel Mode (High Performance)**
+*Auto-selected for RAM > 256MB. All alerts start immediately.*
 
-| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Total Time |
-| :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~2s |
-| **5 Events** | ~3.0 MB | ~12.5 MB | ~2s |
-| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~4s** |
+| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
+| **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~2s |
+| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | ~4s |
 
 #### **Method 2: Queue Mode (Low RAM / Safe)**
 *Critical for preventing crashes on weak devices.*
 
-| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Total Time |
-| :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~2s |
-| **5 Events** | ~2.0 MB | ~4.0 MB | ~10s |
-| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~100s** 🕒 |
+| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
+| **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~10s |
+| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~100s** 🕒 |
 
 > **⚠️ The Trade-off:** In Queue Mode with 50 mass failures sending to both Discord & Telegram, the last notification will arrive **~100 seconds (1.5 mins)** after the event. This delay is intentional to save your router from crashing due to OOM (Out of Memory).
-
 ---
 
 ## 📈 Hardware Recommendations (v1.3.6)
