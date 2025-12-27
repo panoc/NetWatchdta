@@ -266,7 +266,7 @@ If the installation is broken, use the remote uninstaller:
 
 ## 📊 Performance & Resource Analysis
 
-This document provides a detailed technical breakdown of **netwatchdta v1.3.6** resource usage.
+This document provides a detailed technical breakdown of **netwatchdta** resource usage.
 Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`) and **Standard Linux**.
 
 ---
@@ -294,7 +294,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 ---
 
 ### 3. 📡 Scanning Phase (Forced Parallel)
-*In v1.3.6, scanning is **always parallel** to ensure millisecond-precision detection.*
+*Scanning is **always parallel** to ensure millisecond-precision detection.*
 *Metrics indicate the temporary spike during the ~1 second check window.*
 
 **Formula:** `(Shell Overhead + Ping Overhead) × Device Count`
