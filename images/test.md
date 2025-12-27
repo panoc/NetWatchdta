@@ -1,7 +1,7 @@
 # 🚀 netwatchdta (v1.3.6)
 **Universal Network Monitoring for OpenWrt & Linux**
 
-**netwatchdta** is a lightweight, high-performance network monitor designed to track the uptime of local devices, remote servers, and internet connectivity. 
+**netwatchdta** is a lightweight, high-performance network monitor designed to track the uptime of local devices, remote servers, and internet connectivity.
 
 It features a unique **"Hybrid Execution Engine"** that combines **Parallel Scanning** (for instant outage detection) with **Queued Notifications** (to prevent RAM saturation on low-end routers).
 
@@ -13,88 +13,184 @@ It features a unique **"Hybrid Execution Engine"** that combines **Parallel Scan
     * **Scanning:** Always runs in **Parallel** for millisecond-precision detection.
     * **Notifications:** Uses a **Smart Lock Queue** on low-RAM devices to send alerts sequentially, capping RAM usage.
 * **Dual-Stack Alerts:** Native support for **Discord** (Webhooks) and **Telegram** (Bot API).
-* **Resource Efficient:** Uses as little as **300KB RAM** at idle on OpenWrt.
+* **Resource Efficient:** Uses as little as **400KB RAM** at idle on OpenWrt.
 * **Hardware Locked Encryption:** Credentials are encrypted via OpenSSL AES-256 and locked to your specific CPU/MAC address.
 * **Resilience:** Buffers alerts to disk during internet outages and flushes them when connectivity is restored.
 
 ---
 
 ## 📊 Performance & Resource Analysis
-*Data based on v1.3.6 using `uclient-fetch` (OpenWrt) and `curl` (Linux).*
+*Detailed analysis of RAM and Storage usage for v1.3.6.*
 
-### 1. 💾 Storage Requirements
-| Component | Size | Notes |
-| :--- | :--- | :--- |
-| **Core Script & Configs** | **~50 KB** | Ultra-lightweight footprint. |
-| **Dependencies (OpenWrt)** | **~1.4 MB** | `openssl-util`, `ca-bundle`, `uclient-fetch` (often pre-installed). |
-| **Dependencies (Linux)** | **~3.0 MB** | Standard `curl`, `openssl`, `ca-certificates`. |
+### 1. 💾 Disk / Flash Storage Requirements
+*Space required for installation (Script + Dependencies).*
 
-### 2. 🧠 RAM Usage (Real-World Scenarios)
+| Component | OpenWrt (uclient-fetch) | OpenWrt (curl) | Linux (Standard) | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Core Script** | ~50 KB | ~50 KB | ~50 KB | Includes config & service files. |
+| **SSL Libs** | ~1.3 MB | ~1.3 MB | ~2.0 MB | `openssl-util` & `ca-bundle`. |
+| **Fetch Tool** | ~20 KB | ~1.5 MB | ~2.0 MB | `uclient` is native/tiny. `curl` is heavy. |
+| **TOTAL** | **~1.4 MB** | **~2.9 MB** | **~4.1 MB** | **Recommendation:** Use `uclient` on OpenWrt. |
 
-#### **A. Idle State**
-*Background monitoring waiting for next cycle.*
-* **OpenWrt:** ~0.4 MB
-* **Linux:** ~3.5 MB
+### 2. 💤 RAM Usage at Idle
+*Baseline memory usage when the service is sleeping between checks.*
 
-#### **B. Scanning Phase (Parallel Mode)**
-*Usage scales with the number of monitored devices. Duration: ~1 second.*
-*Formula: `(Shell Overhead + Ping Overhead) x Device Count`*
+| Platform | Shell | RAM Usage | Why the difference? |
+| :--- | :--- | :--- | :--- |
+| **OpenWrt** | `ash` | **~0.4 MB** | Optimized for embedded devices (BusyBox). |
+| **Linux** | `bash` | **~3.5 MB** | Feature-rich shell with larger memory footprint. |
 
-| Target Count | OpenWrt RAM Spike | Linux RAM Spike |
-| :--- | :--- | :--- |
-| **1 Device** | ~0.4 MB | ~3.0 MB |
-| **10 Devices** | ~4.0 MB | ~30.0 MB |
-| **50 Devices** | ~20.0 MB | ~150.0 MB |
+### 3. 📡 Scanning Phase (Forced Parallel)
+*In v1.3.6, scanning is **always parallel** to ensure millisecond-precision detection.*
+*Metrics indicate the temporary spike during the ~1 second check window.*
 
-#### **C. Notification Phase (Smart Queue)**
-*Scenario: 50 devices go offline instantly. Alerts sent to Discord AND Telegram.*
+**Formula:** `(Shell Overhead + Ping Overhead) × Device Count`
 
-| System Mode | Behavior | Total Peak RAM (OpenWrt) |
-| :--- | :--- | :--- |
-| **High RAM (>256MB)** | **Instant Parallel:** Sends 50 alerts at once. | **~125 MB** (Risk of Crash) |
-| **Low RAM (<256MB)** | **Smart Queue:** Alerts wait in line. Sends 1 by 1. | **~23 MB** 🟢 **(Safe Limit)** |
-
-> **Analytic Verdict:** By using the Smart Queue, **netwatchdta** ensures that even a 128MB router never exceeds ~23MB RAM usage during a catastrophic network failure, while still detecting the outage instantly.
+| Metric | 1 Device | 5 Devices | 50 Devices | Impact |
+| :--- | :--- | :--- | :--- | :--- |
+| **OpenWrt RAM** | ~0.4 MB | ~2.0 MB | **~20.0 MB** | Safe for >128MB routers. |
+| **Linux RAM** | ~3.0 MB | ~15.0 MB | **~150.0 MB** | High, but negligible for PCs (8GB+ RAM). |
+| **CPU Load** | Negligible | Low | **High Spike** | 100% CPU for ~1s on MIPS (MT7621) routers. |
+| **Execution Time** | ~1.0s | ~1.0s | **~1.0s** | **Scale Invariant:** Checks happen simultaneously. |
 
 ---
 
-## 📈 Hardware Selection Guide
+## 4. 🔔 Notification Phase (The Hybrid Engine)
+*Resource usage depends on the **Execution Mode** (Parallel vs. Queue) and the number of destinations.*
+
+### **A. Single Destination (Discord OR Telegram)**
+*Scenario: Sending alerts to one platform.*
+
+#### **Method 1: Parallel Mode (High Performance)**
+*Auto-selected for RAM > 256MB. All alerts send instantly.*
+
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s |
+| **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~1s |
+| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | ~2s |
+
+#### **Method 2: Queue Mode (Low RAM / Safe)**
+*Auto-selected for RAM < 256MB. Alerts wait in line.*
+*Formula: `(1 Active Transfer) + (N-1 Waiting Shells)`*
+
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s |
+| **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~5s |
+| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~50s** |
+
+### **B. Dual Destination (Discord AND Telegram)**
+*Scenario: Sending alerts to BOTH platforms for every event.*
+*Logic: The script sends sequentially (Discord → Wait → Telegram), so RAM usage is based on the single peak of the active tool, but Execution Time doubles.*
+
+#### **Method 1: Parallel Mode (High Performance)**
+
+| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
+| **5 Events** | ~3.0 MB | ~12.5 MB | ~25.0 MB | ~2s |
+| **50 Events** | **~30.0 MB** | **~125.0 MB** ⚠️ | **~250.0 MB** | ~4s |
+
+#### **Method 2: Queue Mode (Low RAM / Safe)**
+*Critical for preventing crashes on weak devices.*
+
+| Scale | OpenWrt (uclient) RAM | OpenWrt (curl) RAM | Linux (curl) RAM | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
+| **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~10s |
+| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~100s** 🕒 |
+
+> **⚠️ The Trade-off:** In Queue Mode with 50 mass failures sending to both Discord & Telegram, the last notification will arrive **~100 seconds (1.5 mins)** after the event. This delay is intentional to save your router from crashing due to OOM (Out of Memory).
+
+---
+
+## 📈 Hardware Recommendations (v1.3.6)
 
 <details>
 <summary><strong>Click to expand: Safe Device Limits Table</strong></summary>
 
-### **Method 2: Queued Notification Mode (Auto-Selected for <256MB RAM)**
-*Parallel scanning (fast detection) + Serialized notifications (RAM safety).*
+### **1. Method 1: Parallel Mode**
+*Auto-selected for devices with **>256MB RAM**. Instant Alerts.*
+*Limiting Factor: RAM Spike (Risk of Crash).*
 
-| Chipset Tier | Common CPU / Architecture | Example Devices | Behavior during 50 Events | Est. Safe Max Events | Recommended? |
+| Chipset Tier | Example Devices | 50 Events (RAM Spike) | Est. Safe Max (Single Notif) | Est. Safe Max (Dual Notif) | Recommended? |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Legacy / Low Power** | **MediaTek MT7621**<br>*(MIPS)* | Ubiquiti ER-X, R6220 | **CPU:** 100% Spike (Scan)<br>**RAM:** ~20 MB (Safe) | **~50 - 70 Events** | **✅ YES**<br>*(Best Balance)* |
-| **Mid-Range** | **All ARMv8 Chips** | Pi Zero 2, Pi 3/4 | **CPU:** Moderate Spike<br>**RAM:** ~40 MB (Very Safe) | **100+ Events** | **✅ YES** |
-| **High-End** | **x86 / RK3588** | N100, Pi 5, NanoPi R6S | **CPU:** Negligible<br>**RAM:** Negligible | **Unlimited** | **✅ YES** |
+| **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **💀 CRITICAL (~125 MB)** | **~10 - 15 Devices** | **~5 - 10 Devices** | **❌ NO** |
+| **Mid-Range (ARM)** | Pi Zero 2, Flint 2, Pi 3 | **High Spike (~150 MB)** | **~30 - 40 Devices** | **~20 - 30 Devices** | **⚠️ CAUTION** |
+| **High-End (x86)** | N100, Pi 4/5, NanoPi R6S | **Low Load** | **200+ Devices** | **150+ Devices** | **✅ YES** |
+
+### **2. Method 2: Queue Mode**
+*Auto-selected for devices with **<256MB RAM**. Guaranteed Stability.*
+*Limiting Factor: Time Delay (Alerts arrive late).*
+
+| Chipset Tier | Example Devices | 50 Events (RAM Spike) | Est. Safe Max (Single Notif) | Est. Safe Max (Dual Notif) | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy (MIPS)** | Ubiquiti ER-X, R6220 | **~17 MB (Very Safe)** | **~50 - 70 Devices**<br>*(~50s delay)* | **~30 - 40 Devices**<br>*(~60s delay)* | **✅ YES** |
+| **Mid-Range (ARM)** | Pi Zero 2, Pi 3 | **~20 MB (Negligible)** | **100+ Devices**<br>*(~100s delay)* | **~50 - 60 Devices**<br>*(~100s delay)* | **✅ YES** |
+| **High-End (x86)** | N100, Pi 5 | **Negligible** | **Unlimited** | **Unlimited** | **❌ Unnecessary** |
+
+> **ℹ️ Analytic Conclusion:**
+> * **Why is "Dual Notif" lower?** In Queue Mode, sending to two platforms doubles the execution time per event. Monitoring 100 devices with Dual Notifications would result in a **~3.5 minute delay** for the last alert to arrive.
+> * **Recommendation:** If monitoring >50 devices on a low-end router, stick to **Single Notification** (e.g., Discord only) to keep alerts timely.
+
+</details>
+
+<br>
+
+<details>
+<summary><strong>Click to expand: Quick Decision Matrix</strong></summary>
+
+### 🎯 Quick Decision Matrix
+*Choose the right hardware based on your intended usage.*
+
+| If your goal is... | Recommended Hardware Tier | Execution Mode | Best Device Options |
+| :--- | :--- | :--- | :--- |
+| **Just Monitoring**<br>*(Dedicated "Watchdog")* | **Low-End / Legacy**<br>*(Zero Cost)* | **Method 2**<br>*(Auto-Selected)* | Old Routers (128MB RAM), Travel Routers, Pi Zero |
+| **Monitoring + Network Services**<br>*(AdGuard, VPN Client)* | **Mid-Range SBC**<br>*(Balanced)* | **Method 1**<br>*(Standard)* | Raspberry Pi 3/4, NanoPi R4S, Flint 2 |
+| **Heavy Multitasking**<br>*(Gigabit Routing, NAS)* | **High-End x86 / ARM**<br>*(Performance)* | **Method 1**<br>*(Standard)* | NanoPi R6S, Intel N100, Raspberry Pi 5 |
 
 </details>
 
 ---
 
 ## 📂 File Structure
-| Path | File Name | Description |
-| :--- | :--- | :--- |
-| `/etc/netwatchdta/` | `netwatchdta.sh` | Core logic engine. |
-| | `settings.conf` | User configuration (Timeouts, Webhooks, Toggles). |
-| | `device_ips.conf` | List of local IPs to monitor. |
-| | `.vault.enc` | Encrypted credential store. |
-| `/tmp/netwatchdta/` | `nwdta_uptime.log` | Event log (Rotates at 50KB). |
-| | `nwdta_net_status` | Current Internet State (UP/DOWN). |
+**netwatchdta** creates the following files during installation.
+
+### 1. Installation Directory
+**Location:** `/opt/netwatchdta/` (Linux) or `/root/netwatchdta/` (OpenWrt).
+
+| File Name | Description |
+| :--- | :--- |
+| `netwatchdta.sh` | The core logic script (the engine). |
+| `settings.conf` | Main configuration file for user settings. |
+| `device_ips.conf` | List of local IPs to monitor. |
+| `remote_ips.conf` | List of remote IPs to monitor. |
+| `.vault.enc` | Encrypted credential store (Discord/Telegram tokens). |
+| `nwdta_silent_buffer` | Temporary buffer for alerts held during silent hours. |
+| `nwdta_offline_buffer` | Temporary buffer for alerts held during Internet outages. |
+
+### 2. Temporary & Log Files
+**Location:** `/tmp/netwatchdta/`
+*(Note: These are created in RAM to prevent flash storage wear on routers)*
+
+| File Name | Description |
+| :--- | :--- |
+| `nwdta_uptime.log` | The main event log (Service started, alerts sent, etc). |
+| `nwdta_ping.log` | Detailed ping log (Only if `PING_LOG_ENABLE=YES`). |
+| `nwdta_net_status` | Stores current internet status (`UP` or `DOWN`). |
+| `*_d`, `*_c`, `*_t` | Various tracking files for timeout/failure counts. |
 
 ---
 
 ## 🛠️ Commands
-**OpenWrt:**
+
+### **OpenWrt (Procd)**
 ```bash
 /etc/init.d/netwatchdta start       # Start Service
 /etc/init.d/netwatchdta stop        # Stop Service
-/etc/init.d/netwatchdta check       # Check Status
+/etc/init.d/netwatchdta check       # Check Status & PID
 /etc/init.d/netwatchdta logs        # View Live Logs
-/etc/init.d/netwatchdta edit        # Edit Configuration
-/etc/init.d/netwatchdta credentials # Update Discord/Telegram Keys
+/etc/init.d/netwatchdta edit        # Interactive Config Editor
+/etc/init.d/netwatchdta credentials # Update Discord/Telegram Keys safely
 /etc/init.d/netwatchdta purge       # Uninstall
