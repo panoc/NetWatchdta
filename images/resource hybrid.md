@@ -142,9 +142,9 @@ Safe Device Limits Table<
 
 | Chipset Tier | Example Devices | 50 Events (RAM Spike) | Est. Safe Max (Single Notif) | Est. Safe Max (Dual Notif) | Recommended? |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Legacy (MIPS)** | Ubiquiti ER-X, R6220 | **~17 MB (Very Safe)** | **~50 - 70 Devices**<br>*(~50s delay)* | **~30 - 40 Devices**<br>*(~60s delay)* | **✅ YES** |
-| **Mid-Range (ARM)** | Pi Zero 2, Pi 3 | **~20 MB (Negligible)** | **100+ Devices**<br>*(~100s delay)* | **~50 - 60 Devices**<br>*(~100s delay)* | **✅ YES** |
-| **High-End (x86)** | N100, Pi 5 | **Negligible** | **Unlimited** | **Unlimited** | **❌ Unnecessary** |
+| **Legacy (MIPS)** | Ubiquiti ER-X, R6220, Xiaomi 4A | **~17 MB (Very Safe)** | **~50 - 70 Devices**<br>*(~50s delay)* | **~30 - 40 Devices**<br>*(~60s delay)* | **✅ YES** |
+| **Mid-Range (ARM)** | Pi Zero 2, Flint 2, Pi 3  | **~20 MB (Negligible)** | **100+ Devices**<br>*(~100s delay)* | **~50 - 60 Devices**<br>*(~100s delay)* | **✅ YES** |
+| **High-End x86 / ARM** | N100, Pi 4/5, NanoPi R6 | **Negligible** | **Unlimited** | **Unlimited** | **❌ Unnecessary** |
 
 > **ℹ️ Analytic Conclusion:**
 > * **Why is "Dual Notif" lower?** In Queue Mode, sending to two platforms doubles the execution time per event. Monitoring 100 devices with Dual Notifications would result in a **~3.5 minute delay** for the last alert to arrive.
