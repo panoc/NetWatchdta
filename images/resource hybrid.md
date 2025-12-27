@@ -122,3 +122,33 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 > * **OpenWrt Users:** Even on ancient hardware, you can monitor 50+ devices safely using **Queue Mode**.
 > * **Linux Users:** Due to Bash memory overhead, monitoring 50+ devices requires at least **512MB RAM**, regardless of mode.
 
+## 📈 Hardware Recommendations (v1.3.6)
+
+Safe Device Limits Table<
+
+### **1. Method 1: Parallel Mode**
+*Auto-selected for devices with **>256MB RAM**. Instant Alerts.*
+*Limiting Factor: RAM Spike (Risk of Crash).*
+
+| Chipset Tier | Example Devices | 50 Events (RAM Spike) | Est. Safe Max (Single Notif) | Est. Safe Max (Dual Notif) | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **💀 CRITICAL (~125 MB)** | **~10 - 15 Devices** | **~5 - 10 Devices** | **❌ NO** |
+| **Mid-Range (ARM)** | Pi Zero 2, Flint 2, Pi 3 | **High Spike (~150 MB)** | **~30 - 40 Devices** | **~20 - 30 Devices** | **⚠️ CAUTION** |
+| **High-End (x86)** | N100, Pi 4/5, NanoPi R6S | **Low Load** | **200+ Devices** | **150+ Devices** | **✅ YES** |
+
+### **2. Method 2: Queue Mode**
+*Auto-selected for devices with **<256MB RAM**. Guaranteed Stability.*
+*Limiting Factor: Time Delay (Alerts arrive late).*
+
+| Chipset Tier | Example Devices | 50 Events (RAM Spike) | Est. Safe Max (Single Notif) | Est. Safe Max (Dual Notif) | Recommended? |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Legacy (MIPS)** | Ubiquiti ER-X, R6220 | **~17 MB (Very Safe)** | **~50 - 70 Devices**<br>*(~50s delay)* | **~30 - 40 Devices**<br>*(~60s delay)* | **✅ YES** |
+| **Mid-Range (ARM)** | Pi Zero 2, Pi 3 | **~20 MB (Negligible)** | **100+ Devices**<br>*(~100s delay)* | **~50 - 60 Devices**<br>*(~100s delay)* | **✅ YES** |
+| **High-End (x86)** | N100, Pi 5 | **Negligible** | **Unlimited** | **Unlimited** | **❌ Unnecessary** |
+
+> **ℹ️ Analytic Conclusion:**
+> * **Why is "Dual Notif" lower?** In Queue Mode, sending to two platforms doubles the execution time per event. Monitoring 100 devices with Dual Notifications would result in a **~3.5 minute delay** for the last alert to arrive.
+> * **Recommendation:** If monitoring >50 devices on a low-end router, stick to **Single Notification** (e.g., Discord only) to keep alerts timely.
+
+
+
