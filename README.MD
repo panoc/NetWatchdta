@@ -469,7 +469,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 
 ### Safe Device Limits Table
 
-### **1. Method 1: Parallel Mode**
+#### **1. Method 1: Parallel Mode**
 *Best for: Devices with >256MB RAM. Instant Alerts.*
 
 | Chipset Tier | Common CPU | Example Devices | 50 Events (RAM Spike) | Recommended? |
@@ -478,7 +478,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 | **Mid-Range** | **ARM Cortex-A53** | Pi Zero 2, Flint 2, Pi 3 | **High Spike (~150 MB)** | **⚠️ CAUTION** |
 | **High-End** | **x86 / ARMv8** | N100, Pi 4/5, NanoPi R6S | **Low Load** | **✅ YES** |
 
-### **2. Method 2: Queue Mode**
+#### **2. Method 2: Queue Mode**
 *Best for: Devices with <256MB RAM. Guaranteed Stability.*
 
 | Chipset Tier | Common CPU | Example Devices | 50 Events (RAM Spike) | Recommended? |
