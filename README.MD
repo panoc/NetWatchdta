@@ -366,11 +366,11 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 *Auto-selected for RAM < 256MB. Alerts wait in line.*
 *Formula: `(1 Active Transfer) + (N-1 Waiting Shells)`*
 
-| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
-| :--- | :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s |
-| **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~5s |
-| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~50s** |
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time | Execution Time dual Destination|
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s | ~10s |
+| **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~5s | ~10s |
+| **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~50s** | **~100s** 🕒 |
 
 ---
 
@@ -392,7 +392,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 
 | Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time |
 | :--- | :--- | :--- | :--- | :--- |
-| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~2s |
+| **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~10s |
 | **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~10s |
 | **50 Events** | **~15.0 MB** 🟢 | **~17.0 MB** 🟢 | **~152.0 MB** | **~100s** 🕒 |
 
