@@ -374,7 +374,8 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 > * **Linux Users:** Due to Bash memory overhead, monitoring 50+ devices requires at least **512MB RAM**, regardless of mode.
 
 <details>
-<symmary><strong>Thoughts</strong></summary>
+<symmary><strong>Final Thoughts </strong></summary>
+
 ### 👤 **Profile 1: The "Pure Watchdog"**
 * **Goal:** You want a cheap, dedicated device just to monitor your other servers/internet. You don't want to spend money on new hardware.
 * **The Problem:** Low-end devices (like the **Pi Zero 1** or **MIPS routers**) lack hardware encryption.
