@@ -19,7 +19,9 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 ## ✨ Key Features
 
 * ** Universal Installer:** One script works on OpenWrt routers, Raspberry Pis, VPSs, and Desktop Linux.
+
 * ** Universal Compatibility: Runs on OpenWrt (Ash) and Standard Linux (Bash/Systemd).
+
 * ** Smart Engine:**
      * **OpenWrt:** Uses `uclient-fetch` and minimal RAM logic.
      * **Linux:** Uses `curl` and `systemd` for maximum stability.
