@@ -353,32 +353,6 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 ### Safe Device Limits Table
 
 #### **1. Method 1: Parallel Mode**
-*Best for: Devices with >256MB RAM. Instant Alerts.*
-
-| Chipset Tier | Common CPU | Example Devices | 50 Events (RAM Spike) | Recommended? |
-| :--- | :--- | :--- | :--- | :--- |
-| **Legacy / Low Power** | **MIPS (MT7621)** | Ubiquiti ER-X, Xiaomi 4A | **💀 CRITICAL (~125 MB)** | **❌ NO** |
-| **Mid-Range** | **ARM Cortex-A53** | Pi Zero 2, Flint 2, Pi 3 | **High Spike (~150 MB)** | **⚠️ CAUTION** |
-| **High-End** | **x86 / ARMv8** | N100, Pi 4/5, NanoPi R6S | **Low Load** | **✅ YES** |
-
-#### **2. Method 2: Queue Mode**
-*Best for: Devices with <256MB RAM. Guaranteed Stability.*
-
-| Chipset Tier | Common CPU | Example Devices | 50 Events (RAM Spike) | Recommended? |
-| :--- | :--- | :--- | :--- | :--- |
-| **Legacy / Low Power** | **MIPS (MT7621)** | Ubiquiti ER-X, R6220 | **~17 MB (Very Safe)** | **✅ YES** |
-| **Mid-Range** | **ARM Cortex-A53** | Pi Zero 2, Pi 3 | **~20 MB (Negligible)** | **✅ YES** |
-| **High-End** | **x86 / ARMv8** | N100, Pi 5 | **Negligible** | **❌ Unnecessary** |
-
-> **ℹ️ Analytic Conclusion:**
-> * **OpenWrt Users:** Even on ancient hardware, you can monitor 50+ devices safely using **Queue Mode**.
-> * **Linux Users:** Due to Bash memory overhead, monitoring 50+ devices requires at least **512MB RAM**, regardless of mode.
-
-### 📈 Hardware Recommendations (v1.3.6)
-
-Safe Device Limits Table<
-
-#### **1. Method 1: Parallel Mode**
 *Auto-selected for devices with **>256MB RAM**. Instant Alerts.*
 *Limiting Factor: RAM Spike (Risk of Crash).*
 
@@ -397,6 +371,11 @@ Safe Device Limits Table<
 | **Legacy (MIPS)** | Ubiquiti ER-X, R6220, Xiaomi 4A | **~17 MB (Very Safe)** | **~50 - 70 Devices**<br>*(~50s delay)* | **~30 - 40 Devices**<br>*(~60s delay)* | **✅ YES** |
 | **Mid-Range (ARM)** | Pi Zero 2, Flint 2, Pi 3  | **~20 MB (Negligible)** | **100+ Devices**<br>*(~100s delay)* | **~50 - 60 Devices**<br>*(~100s delay)* | **✅ YES** |
 | **High-End x86/ARM** | N100, Pi 4/5, NanoPi R6 | **Negligible** | **Unlimited** | **Unlimited** | **❌ Unnecessary** |
+
+> **ℹ️ Analytic Conclusion:**
+> * **OpenWrt Users:** Even on ancient hardware, you can monitor 50+ devices safely using **Queue Mode**.
+> * **Linux Users:** Due to Bash memory overhead, monitoring 50+ devices requires at least **512MB RAM**, regardless of mode.
+
 
 ### 👤 **Profile 1: The "Pure Watchdog"**
 * **Goal:** You want a cheap, dedicated device just to monitor your other servers/internet. You don't want to spend money on new hardware.
