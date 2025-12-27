@@ -332,7 +332,7 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 *Auto-selected for RAM < 256MB. Alerts wait in line.*
 *Formula: `(1 Active Transfer) + (N-1 Waiting Shells)`*
 
-| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time  Discord & Telegram | Execution Time Discord & Telegram |
+| Scale | OpenWrt (uclient) | OpenWrt (curl) | Linux (curl) | Execution Time  Single | Execution Time Dual |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1 Event** | ~0.6 MB | ~2.5 MB | ~5.0 MB | ~1s | ~10s |
 | **5 Events** | ~2.0 MB | ~4.0 MB | ~17.0 MB | ~5s | ~10s |
