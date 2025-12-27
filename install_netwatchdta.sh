@@ -2,6 +2,7 @@
 # netwatchdta Installer - Automated Setup for OpenWrt & Linux (Universal)
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
+SCRIPT_VERSION="1.3.8"
 
 # ==============================================================================
 #  SELF-CLEANUP MECHANISM
@@ -145,7 +146,7 @@ safe_fetch() {
 #  INSTALLER HEADER
 # ==============================================================================
 echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v1.3.7"
+echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v$SCRIPT_VERSION"
 echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
 echo -e "${BLUE}=======================================================${NC}"
 echo -e "${WHITE}🖥️  System Detected : ${GREEN}$OS_TYPE${NC}"
@@ -657,6 +658,7 @@ cat <<EOF > "$INSTALL_DIR/netwatchdta.sh"
 # netwatchdta - Network Monitoring for OpenWrt & Linux (Core Engine)
 # Generated for: $OS_TYPE
 # Directory: $INSTALL_DIR
+VERSION="$SCRIPT_VERSION"
 
 # --- DIRECTORY DEFS ---
 BASE_DIR="$INSTALL_DIR"
@@ -1110,11 +1112,12 @@ start_service() {
 }
 
 check() {
+    local v=$(grep "^VERSION=" "$INSTALL_DIR/netwatchdta.sh" | cut -d'"' -f2) # <--- READ VERSION
     if pgrep -f "netwatchdta.sh" > /dev/null; then
-        echo -e "\033[1;32m● netwatchdta is RUNNING.\033[0m"
+        echo -e "\033[1;32m● netwatchdta is RUNNING.\033[0m (v$v)" # <--- DISPLAY IT
         echo "   PID: \$(pgrep -f "netwatchdta.sh" | head -1)"
     else
-        echo -e "\033[1;31m● netwatchdta is STOPPED.\033[0m"
+        echo -e "\033[1;31m● netwatchdta is STOPPED.\033[0m (v$v)" # <--- DISPLAY IT
     fi
 }
 
