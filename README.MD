@@ -165,21 +165,11 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 <summary><strong>List of all available settings</strong></summary>
 
 | Setting | Description |
-| --- | --- |
+| :--- | :--- |
 | `ROUTER_NAME` | The name displayed in the title of all notifications. |
 | `FETCH_TOOL` | **AUTO**, `CURL`, `UCLIENT`. Controls which tool sends alerts. |
-| `EXEC_METHOD` | **Notification Concurrency.**<br>
-
-<br>`1` = Parallel (Fast, >=512MB RAM).<br>
-
-<br>`2` = Queue (Safe, <512MB RAM). |
-| `SCAN_BATCH_SIZE` | **Scanning Concurrency.**<br>
-
-<br>`0` = Unlimited Parallel (High Performance).<br>
-
-<br>`AUTO` = Smart Batching based on Free RAM.<br>
-
-<br>`10` = Fixed number of parallel pings. |
+| `EXEC_METHOD` | **Notification Concurrency.**<br>`1` = Parallel (Fast, >=512MB RAM).<br>`2` = Queue (Safe, <512MB RAM). |
+| `SCAN_BATCH_SIZE` | **Scanning Concurrency.**<br>`0` = Unlimited Parallel (High Performance).<br>`AUTO` = Smart Batching based on Free RAM.<br>`10` = Fixed number of parallel pings. |
 | `LOG_ENABLE` | Enables writing events to `netwatchdta.log`. |
 | `LOG_MAX_SIZE` | Max size of the log file in KB before rotation. |
 | `DISCORD_ENABLE` | Master switch for Discord alerts. |
@@ -188,9 +178,9 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 | `SILENT_START` | Hour to **start** silence (0-23). |
 | `SILENT_END` | Hour to **end** silence (0-23). |
 | `DISCORD_MENTION_LOCAL` | Mention on Local Device events. |
-| `DISCORD_MENTION_REMOTE` | Mention on Remote Server events. |
+| `DISCORD_MENTION_REMOTE`| Mention on Remote Server events. |
 | `DISCORD_MENTION_NET` | Mention on Internet (WAN) events. |
-| `DISCORD_MENTION_HB` | Mention inside the daily Heartbeat report. |
+| `DISCORD_MENTION_HB`| Mention inside the daily Heartbeat report. |
 | `CPU_GUARD_THRESHOLD` | System load value (1 min avg) to trigger pause. |
 | `RAM_GUARD_MIN_FREE` | Minimum free RAM (in KB) required to run checks. |
 | `HEARTBEAT` | Enables the periodic "I am still running" report. |
@@ -198,7 +188,7 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 | `HB_TARGET` | `DISCORD`, `TELEGRAM`, or `BOTH`. |
 | `HB_START_HOUR` | The hour (0-23) the heartbeat aligns to (e.g., `12` for Noon). |
 | `HB_START_MIN` | The minute (0-59) the heartbeat aligns to (e.g., `30`). |
-| `EXT_CHECK_ENABLE` | Enables monitoring of the external internet connection. |
+| `EXT_CHECK_ENABLE` |  Enables monitoring of the external internet connection. |
 | `EXT_IP1` | Primary public IP to ping (Google DNS). |
 | `EXT_IP2` | Secondary public IP to ping (Cloudflare DNS). |
 | `EXT_SCAN_INTERVAL` | Seconds between internet checks. |
@@ -215,7 +205,6 @@ Location: `/opt/netwatchdta/settings.conf` (Linux) or `/root/netwatchdta/setting
 | `REM_FAIL_THRESHOLD` | Consecutive failed pings before marking a Server as DOWN. |
 | `REM_PING_COUNT` | Number of packets per remote check. |
 | `REM_PING_TIMEOUT` | Seconds to wait for remote ping response. |
-
 </details>
 
 
