@@ -377,7 +377,7 @@ To ensure stability, choose the configuration that matches your hardware capabil
 * **Behavior:** Instant alerts. High RAM usage during mass outages.
 
 | Chipset Tier | Example Devices | RAM Spike (50 Events) | Safe Limit (Single Notif) | Safe Limit (Dual Notif) | Recommended? |
-| --- | --- | --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 | **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **CRITICAL (~125 MB)** | **~10 Devices** | **~5 Devices** | ❌ **NO** |
 | **Mid-Range (ARM)** | Pi Zero 2, Pi 3, Flint 2 | **High (~150 MB)** | **~40 Devices** | **~25 Devices** | ⚠️ **CAUTION** |
 | **High-End (x86/ARM)** | N100, Pi 4/5, NanoPi R6 | **Low Load** | **200+ Devices** | **150+ Devices** | ✅ **YES** |
@@ -389,42 +389,48 @@ To ensure stability, choose the configuration that matches your hardware capabil
 * **Behavior:** Alerts queue up one by one. Zero RAM spikes.
 
 | Chipset Tier | Example Devices | RAM Spike (50 Events) | Safe Limit (Single Notif) | Safe Limit (Dual Notif) | Recommended? |
-| --- | --- | --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 | **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **~17 MB (Safe)** | **~60 Devices** | **~35 Devices** | ✅ **YES** |
 | **Mid-Range (ARM)** | Pi Zero 2, Pi 3, Flint 2 | **~20 MB (Safe)** | **100+ Devices** | **~60 Devices** | ✅ **YES** |
 | **High-End (x86/ARM)** | N100, Pi 4/5, NanoPi R6 | **Negligible** | **Unlimited** | **Unlimited** | ❌ **Unnecessary** |
 
-> **ℹ️ Note on Safe Limits:**
-> * **Single Notif:** Sending to Discord **OR** Telegram.
-> * **Dual Notif:** Sending to Discord **AND** Telegram (Doubles the workload).
-> * **Limit Reached?** If you exceed the "Safe Limit" in Queue Mode, the router won't crash, but the last alert might arrive 2-3 minutes late.
-> 
-> 
+---
+
+### Recommended Configuration by Device
+
+| Device Class | RAM | Scan Mode (`SCAN_BATCH_SIZE`) | Notif Mode (`EXEC_METHOD`) | Safe Device Limit |
+| :--- | :--- | :--- | :--- | :--- |
+| **Legacy / Tiny**<br>*(WR841N, ER-X, Pi Zero 1)* | 128MB - 256MB | **AUTO** (Batch ~10 Max) | **Queue** (2) | **50+** |
+| **Mid-Range**<br>*(Pi 3, Xiaomi 4A, Gl.iNet)* | 256MB - 512MB | **AUTO** (Batch ~25 Max) | **Queue** (2) | **100+** |
+| **High-End / x86**<br>*(Pi 4/5, N100, NanoPi R6)* | 512MB+ | **0** (Parallel) | **Parallel** (1) | **Unlimited** |
+
+> **⚠️ The "Golden Rule" of Stability**
+> If you are ever in doubt, or if your device feels sluggish:
+> **Set `SCAN_BATCH_SIZE=AUTO`.**
+>
+> It is better to check your 100 devices in **5 seconds** (Batch) than to check them in **1 second** (Parallel) and crash the router.
 
 <details>
 <summary><strong>💡 Final Thoughts & Advice</strong></summary>
 
 ### 👤 Profile 1: The "Pure Watchdog"
-
 * **Goal:** A cheap, dedicated monitoring device (e.g., Pi Zero 1, Old Router).
 * **The Fix:** You **must** use **Queue Mode** (`EXEC_METHOD=2`) and **Batch Scanning** (`SCAN_BATCH_SIZE=AUTO`).
 * **Why:** This ensures the device never runs out of RAM, even if it monitors 100 IPs.
 
 ### 👤 Profile 2: The "Network Enhancer"
-
 * **Goal:** Running this alongside AdGuard Home or VPN on a mid-range device (Pi 3, Flint 2).
 * **The Fix:** **Parallel Mode** (`EXEC_METHOD=1`) is usually safe, but don't go crazy with 100+ devices if you also have heavy VPN traffic.
 
 ### 👤 Profile 3: The "Power User"
-
 * **Goal:** Running on an Intel N100, Raspberry Pi 5, or NanoPi R6S.
 * **The Fix:** Use **Parallel Mode** (`EXEC_METHOD=1`) and **Unlimited Scanning** (`SCAN_BATCH_SIZE=0`). Your hardware is powerful enough to handle anything.
 
 > **⚠️ The "Golden Rule" of Stability**
 > If you are ever in doubt, or if your device feels sluggish:
 > **Switch to Queue Mode.**
+>
 > It is better to receive your 50th alert **2 minutes late** than to have your monitoring device **crash** because it tried to send them all at the exact same second.
-
 </details>
 </details>
 
