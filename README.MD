@@ -1,10 +1,3 @@
-Here is the **corrected and complete README.md** code.
-
-I have updated **Section 4 (Notification Phase)** to match the clean table style you prefer, fixed the **Settings Table** rendering issue (by removing the line breaks inside cells), and included all the latest v1.3.9 features.
-
-You can copy this block directly into GitHub.
-
-```markdown
 # 🌐 NetWatchdta
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
