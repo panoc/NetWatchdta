@@ -16,12 +16,12 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 
 ---
 
-## ✨ Key Features (v1.3.9)
+## ✨ Key Features
 
 * **Universal Installer:** One script works on OpenWrt routers, Raspberry Pis, VPSs, and Desktop Linux.
 * **Smart Hardware Detection:** Automatically configures itself for **High Performance** (Parallel) or **Safe Mode** (Batching) based on your RAM (512MB Threshold).
 * **Self-Healing Config:** The installer automatically detects missing settings in your configuration file during upgrades and patches them with safe defaults.
-* **Smart Batch Scanning:** (New in v1.3.9) Dynamically calculates how many devices to ping simultaneously based on **Free RAM**, reserving a 10% safety margin to prevent crashes on low-end hardware.
+* **Smart Batch Scanning:** Dynamically calculates how many devices to ping simultaneously based on **Free RAM**, reserving a 10% safety margin to prevent crashes on low-end hardware.
 * **Dual Notifications:** Send alerts to **Discord** (with rich embeds) and **Telegram** simultaneously or selectively.
 * **Encryption Vault:** Credentials (tokens/webhooks) are encrypted using OpenSSL AES-256 and locked to your specific hardware.
 * **Offline Buffer:** If the internet goes down, alerts are queued and delivered in bulk once connectivity is restored.
