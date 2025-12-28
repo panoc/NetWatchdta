@@ -2,7 +2,7 @@
 # netwatchdta Installer - Automated Setup for OpenWrt & Linux (Universal)
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
-SCRIPT_VERSION="1.3.8"
+SCRIPT_VERSION="1.3.9"
 
 # ==============================================================================
 #  SELF-CLEANUP MECHANISM
@@ -198,14 +198,19 @@ if [ "$OS_TYPE" = "OPENWRT" ]; then
     MIN_RAM_KB=4096 # 4MB Threshold
 
     # 3. Check Physical Memory for Execution Method Auto-Detection
-    # Rule: >= 256MB (262144 kB) = Parallel (1), < 256MB = Sequential (2)
+    # UPDATED LOGIC v1.3.9:
+    # >= 512MB (524288 kB) = High End (Full Parallel, No Batching)
+    # <  512MB = Low End (Smart Batching, Queue Notifications)
     TOTAL_PHY_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-    if [ "$TOTAL_PHY_MEM_KB" -ge 262144 ]; then
+    
+    if [ "$TOTAL_PHY_MEM_KB" -ge 524288 ]; then
         AUTO_EXEC_METHOD="1"
-        EXEC_MSG="Parallel (High RAM Detected: $((TOTAL_PHY_MEM_KB/1024))MB)"
+        AUTO_BATCH_SIZE="0" # 0 means Unlimited/Parallel
+        EXEC_MSG="High Performance (Parallel Scanning + Parallel Notif)"
     else
         AUTO_EXEC_METHOD="2"
-        EXEC_MSG="Queue Mode (Low RAM Detected: $((TOTAL_PHY_MEM_KB/1024))MB)"
+        AUTO_BATCH_SIZE="AUTO" # Will trigger dynamic calculation with 10% Safety Net
+        EXEC_MSG="Safe Mode (Smart Batching + Queue Notif)"
     fi
 
     # 4. Define Dependency List (OpenWrt)
@@ -223,9 +228,10 @@ if [ "$OS_TYPE" = "OPENWRT" ]; then
 
 # --- STANDARD LINUX SPECIFIC CHECKS ---
 else
-    # Linux Desktop/Server always uses Parallel
+    # Linux Desktop/Server always uses Full Parallel
     AUTO_EXEC_METHOD="1"
-    EXEC_MSG="Parallel (Desktop/Server Mode)"
+    AUTO_BATCH_SIZE="0"
+    EXEC_MSG="High Performance (Parallel Mode)"
     
     MISSING_DEPS=""
     command -v curl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS curl"
@@ -460,24 +466,29 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     fi
     
     # 3f. Heartbeat Logic
-    HB_VAL="NO"
-    HB_SEC="86400"
-    HB_TARGET="BOTH"
-    HB_START_HOUR="12"
-    
+    HB_VAL="NO"; HB_SEC="86400"; HB_TARGET="BOTH"; HB_START_HOUR="12"; HB_START_MIN="00"
     echo -e "\n${BLUE}--- Heartbeat Settings ---${NC}"
     ask_yn "💓 Enable Heartbeat (System check-in)?"
     
     if [ "$ANSWER_YN" = "y" ]; then
         HB_VAL="YES"
-        printf "${BOLD}   > Interval in HOURS (e.g., 24): ${NC}"
-        read hb_hours </dev/tty
-        if echo "$hb_hours" | grep -qE '^[0-9]+$'; then
-             HB_SEC=$((hb_hours * 3600))
+        echo -e "${CYAN}   ℹ️  Interval can be in Hours or Minutes.${NC}"
+        echo -e "   1. ${BOLD}${WHITE}Hours${NC} (e.g., every 12 hours)"
+        echo -e "   2. ${BOLD}${WHITE}Minutes${NC} (e.g., every 30 minutes)"
+        ask_opt "   Choice" "2"
+        
+        if [ "$ANSWER_OPT" = "1" ]; then
+            printf "${BOLD}   > Interval in HOURS: ${NC}"
+            read val </dev/tty
+            HB_SEC=$((val * 3600))
         else
-             HB_SEC=86400 # Default fallback
+            printf "${BOLD}   > Interval in MINUTES: ${NC}"
+            read val </dev/tty
+            HB_SEC=$((val * 60))
         fi
 
+        echo -e "${CYAN}   ℹ️  Set Start Time (Alignment Reference)${NC}"
+        
         # Ask for Start Hour
         while :; do
             printf "${BOLD}   > Start Hour (0-23) [Default 12]: ${NC}"
@@ -487,6 +498,17 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
                 break
             fi
             echo -e "${RED}   ❌ Invalid hour.${NC}"
+        done
+        
+        # Ask for Start Minute
+        while :; do
+            printf "${BOLD}   > Start Minute (0-59) [Default 00]: ${NC}"
+            read HB_START_MIN </dev/tty
+            if [ -z "$HB_START_MIN" ]; then HB_START_MIN="00"; break; fi
+            if echo "$HB_START_MIN" | grep -qE '^[0-9]+$' && [ "$HB_START_MIN" -ge 0 ] && [ "$HB_START_MIN" -le 59 ]; then
+                break
+            fi
+            echo -e "${RED}   ❌ Invalid minute.${NC}"
         done
         
         # --- HEARTBEAT TARGET SELECTOR ---
@@ -519,17 +541,41 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     echo -e "     - Start      : $user_silent_start:00"
     echo -e "     - End        : $user_silent_end:00"
     echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC}"
-    echo -e "     - Start Hour : $HB_START_HOUR:00"
+    echo -e "     - Interval   : ${BOLD}${WHITE}$HB_SEC${NC} seconds"
+    echo -e "     - Start Time : ${BOLD}${WHITE}$HB_START_HOUR:$HB_START_MIN${NC}"
     echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
 fi
 # ==============================================================================
-    #  STEP 4: GENERATE CONFIGURATION FILES
-    # ==============================================================================
-    if [ "$KEEP_CONFIG" -eq 0 ]; then
+#  STEP 4: GENERATE OR PATCH CONFIGURATION FILES
+# ==============================================================================
+
+# Function: patch_param
+# Purpose:  Injects missing parameters into settings.conf under the correct section
+patch_param() {
+    local key="$1"
+    local default_val="$2"
+    local section="$3"
     
-    # Auto-detect Fetch Tool preference
-    # OpenWrt: Defaults to AUTO (to allow uclient priority)
-    # Linux: Defaults to CURL (Native standard)
+    # Check if the key already exists (start of line, ignoring whitespace)
+    if ! grep -q "^[[:space:]]*$key=" "$CONFIG_FILE"; then
+        echo -e "${YELLOW}   🔧 Upgrade: Restoring missing parameter '$key' to [$section]...${NC}"
+        
+        # Check if the section header exists
+        if grep -q "\[$section\]" "$CONFIG_FILE"; then
+            # Insert the parameter immediately after the section header
+            # We use a temp file to ensure safety across all 'sed' versions
+            sed "/\[$section\]/a $key=$default_val # Restored by v$SCRIPT_VERSION" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+        else
+            # If section is missing entirely, append both section and key to the end
+            echo -e "\n[$section]" >> "$CONFIG_FILE"
+            echo "$key=$default_val # Restored by v$SCRIPT_VERSION" >> "$CONFIG_FILE"
+        fi
+    fi
+}
+
+if [ "$KEEP_CONFIG" -eq 0 ]; then
+    # --- SCENARIO A: CLEAN INSTALL (Generate Full File) ---
+    
     if [ "$OS_TYPE" = "OPENWRT" ]; then F_TOOL="AUTO"; else F_TOOL="CURL"; fi
 
     cat <<EOF > "$CONFIG_FILE"
@@ -546,8 +592,16 @@ ROUTER_NAME="$router_name_input"
 # WARNING: Change only if you know what you are doing. Default: AUTO
 FETCH_TOOL="$F_TOOL"
 
-# EXEC_METHOD: 1=Parallel (Fast, >256MB RAM), 2=Queue Mode (Safe, Low RAM)
+# EXEC_METHOD: Controls Notification Concurrency (Alerts)
+# 1 = Parallel Mode (Fast, sends multiple alerts at once). Best for >=512MB RAM.
+# 2 = Queue Mode (Safe, sends alerts one by one). Best for <512MB RAM.
 EXEC_METHOD=$AUTO_EXEC_METHOD
+
+# SCAN_BATCH_SIZE: Controls Scanning Concurrency (Pings)
+# 0 = Unlimited (Full Parallel) - For High End devices (>=512MB)
+# AUTO = Dynamically calculated based on Free RAM (Safe) - For Low End (<512MB)
+# 10 = Fixed batch size (Process 10 at a time)
+SCAN_BATCH_SIZE=$AUTO_BATCH_SIZE
 
 [Log Settings]
 UPTIME_LOG_MAX_SIZE=51200 # Max log file size in bytes for uptime tracking. Default is 51200.
@@ -575,6 +629,7 @@ HEARTBEAT=$HB_VAL # Periodic I am alive notification (YES/NO).
 HB_INTERVAL=$HB_SEC # Seconds between heartbeat messages. Default is 86400.
 HB_TARGET=$HB_TARGET # Target for Heartbeat: DISCORD, TELEGRAM, BOTH
 HB_START_HOUR=$HB_START_HOUR # Time of Heartbeat will start. Default is 12.
+HB_START_MIN=$HB_START_MIN # Minute of Heartbeat will start. Default is 00.
 
 [Internet Connectivity]
 # SMART DEFAULT: Robust settings to prevent false alarms
@@ -615,6 +670,78 @@ EOF
 # Example: 142.250.180.206 @ Google Server
 # Note: These are ONLY checked if Internet is UP (Strict Dependency).
 EOF
+
+else
+    # --- SCENARIO B: UPGRADE MODE (Full Self-Healing) ---
+    echo -e "${CYAN}♻️  Auditing configuration file for missing parameters...${NC}"
+    
+    # 1. Log Settings
+    patch_param "UPTIME_LOG_MAX_SIZE" "51200" "Log Settings"
+    patch_param "PING_LOG_ENABLE" "NO" "Log Settings"
+
+    # 2. Notification Settings
+    patch_param "DISCORD_ENABLE" "$DISCORD_ENABLE_VAL" "Notification Settings"
+    patch_param "TELEGRAM_ENABLE" "$TELEGRAM_ENABLE_VAL" "Notification Settings"
+    patch_param "SILENT_ENABLE" "$SILENT_ENABLE_VAL" "Notification Settings"
+    patch_param "SILENT_START" "$user_silent_start" "Notification Settings"
+    patch_param "SILENT_END" "$user_silent_end" "Notification Settings"
+
+    # 3. Discord
+    patch_param "DISCORD_MENTION_LOCAL" "YES" "Discord"
+    patch_param "DISCORD_MENTION_REMOTE" "YES" "Discord"
+    patch_param "DISCORD_MENTION_NET" "YES" "Discord"
+    patch_param "DISCORD_MENTION_HB" "NO" "Discord"
+
+    # 4. Performance Settings
+    patch_param "CPU_GUARD_THRESHOLD" "2.0" "Performance Settings"
+    patch_param "RAM_GUARD_MIN_FREE" "4096" "Performance Settings"
+
+    # 5. Heartbeat
+    patch_param "HEARTBEAT" "$HB_VAL" "Heartbeat"
+    patch_param "HB_INTERVAL" "$HB_SEC" "Heartbeat"
+    patch_param "HB_TARGET" "$HB_TARGET" "Heartbeat"
+    patch_param "HB_START_HOUR" "$HB_START_HOUR" "Heartbeat"
+    patch_param "HB_START_MIN" "$HB_START_MIN" "Heartbeat"
+
+    # 6. Internet Connectivity
+    patch_param "EXT_ENABLE" "YES" "Internet Connectivity"
+    patch_param "EXT_IP" "1.1.1.1" "Internet Connectivity"
+    patch_param "EXT_IP2" "8.8.8.8" "Internet Connectivity"
+    patch_param "EXT_SCAN_INTERVAL" "60" "Internet Connectivity"
+    patch_param "EXT_FAIL_THRESHOLD" "1" "Internet Connectivity"
+    patch_param "EXT_PING_COUNT" "4" "Internet Connectivity"
+    patch_param "EXT_PING_TIMEOUT" "5" "Internet Connectivity"
+
+    # 7. Local Device Monitoring
+    patch_param "DEVICE_MONITOR" "YES" "Local Device Monitoring"
+    patch_param "DEV_SCAN_INTERVAL" "10" "Local Device Monitoring"
+    patch_param "DEV_FAIL_THRESHOLD" "2" "Local Device Monitoring"
+    patch_param "DEV_PING_COUNT" "2" "Local Device Monitoring"
+    patch_param "DEV_PING_TIMEOUT" "1" "Local Device Monitoring"
+
+    # 8. Remote Device Monitoring
+    patch_param "REMOTE_MONITOR" "YES" "Remote Device Monitoring"
+    patch_param "REM_SCAN_INTERVAL" "30" "Remote Device Monitoring"
+    patch_param "REM_FAIL_THRESHOLD" "1" "Remote Device Monitoring"
+    patch_param "REM_PING_COUNT" "4" "Remote Device Monitoring"
+    patch_param "REM_PING_TIMEOUT" "5" "Remote Device Monitoring"
+    
+    # 9. Global Variables (Top of file - special handling)
+    if ! grep -q "^EXEC_METHOD=" "$CONFIG_FILE"; then
+        sed -i "2i EXEC_METHOD=$AUTO_EXEC_METHOD" "$CONFIG_FILE"
+        echo -e "${YELLOW}   🔧 Restored missing EXEC_METHOD.${NC}"
+    fi
+    if ! grep -q "^SCAN_BATCH_SIZE=" "$CONFIG_FILE"; then
+        sed -i "3i SCAN_BATCH_SIZE=$AUTO_BATCH_SIZE" "$CONFIG_FILE"
+        echo -e "${YELLOW}   🔧 Restored missing SCAN_BATCH_SIZE.${NC}"
+    fi
+    if ! grep -q "^FETCH_TOOL=" "$CONFIG_FILE"; then
+        if [ "$OS_TYPE" = "OPENWRT" ]; then FT="AUTO"; else FT="CURL"; fi
+        sed -i "2i FETCH_TOOL=$FT" "$CONFIG_FILE"
+        echo -e "${YELLOW}   🔧 Restored missing FETCH_TOOL.${NC}"
+    fi
+    
+    echo -e "${GREEN}✅ Configuration audit complete. File is compliant with v$SCRIPT_VERSION.${NC}"
 fi
 
 # ==============================================================================
@@ -961,10 +1088,52 @@ check_ip_logic() {
     fi
 }
 
+# --- SMART HEARTBEAT ALIGNMENT ---
+align_heartbeat() {
+    # Calculate midnight timestamp for today
+    local now=$(date +%s)
+    local h=$(date +%H)
+    local m=$(date +%M)
+    local s=$(date +%S)
+    
+    # Strip leading zeros to avoid octal interpretation issues
+    h=${h#0}; m=${m#0}; s=${s#0}
+    
+    local sec_today=$((h * 3600 + m * 60 + s))
+    local midnight=$((now - sec_today))
+    
+    # Get user target time (default 12:00)
+    local start_h=${HB_START_HOUR:-12}
+    start_h=${start_h#0}
+    local start_m=${HB_START_MIN:-00}
+    start_m=${start_m#0}
+    
+    # Calculate target start timestamp for today
+    local target=$((midnight + start_h * 3600 + start_m * 60))
+    
+    # Adjust target backwards or forwards to find the last theoretical heartbeat
+    # This aligns future heartbeats to the exact minute requested.
+    if [ "$target" -gt "$now" ]; then
+        # Target is in future today. Go back intervals until we are in the past.
+        local diff=$((target - now))
+        local intervals=$(((diff + HB_INTERVAL - 1) / HB_INTERVAL))
+        LAST_HB_CHECK=$((target - (intervals * HB_INTERVAL)))
+    else
+        # Target passed today. Find most recent interval point.
+        local diff=$((now - target))
+        local intervals=$((diff / HB_INTERVAL))
+        LAST_HB_CHECK=$((target + (intervals * HB_INTERVAL)))
+    fi
+    
+    log_msg "[SYSTEM] Heartbeat aligned to start sequence at: $start_h:$start_m" "UPTIME" "$NOW_HUMAN"
+}
+
 # --- INITIAL STARTUP ---
 load_config; load_credentials
 if [ $? -eq 0 ]; then log_msg "[SYSTEM] Credentials loaded." "UPTIME" "$(date '+%b %d %H:%M:%S')"; else log_msg "[WARNING] Vault error or missing." "UPTIME" "$(date '+%b %d %H:%M:%S')"; fi
-[ "$HEARTBEAT" = "YES" ] && LAST_HB_CHECK=$(date +%s)
+
+# Initialize Heartbeat Alignment
+[ "$HEARTBEAT" = "YES" ] && align_heartbeat
 
 # --- MAIN LOGIC LOOP ---
 while true; do
@@ -974,23 +1143,31 @@ while true; do
     # Resource Check (Universal)
     if [ -f /proc/meminfo ] && grep -q MemAvailable /proc/meminfo; then
         CUR_FREE_RAM=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+        # Capture Total RAM for Safety Calculation (Only possible via meminfo)
+        TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
     else
         CUR_FREE_RAM=$(free | awk '/Mem:/ {print $4}')
+        # Estimate Total from free+used (Less accurate fallback for non-meminfo systems)
+        TOTAL_RAM_KB=$((CUR_FREE_RAM + 51200)) 
     fi
     CPU_LOAD=$(cat /proc/loadavg | awk '{print $1}'); CPU_LOAD=${CPU_LOAD:-0.00}
     
     if awk "BEGIN {exit !($CPU_LOAD > $CPU_GUARD_THRESHOLD)}"; then log_msg "[SYSTEM] High Load ($CPU_LOAD). Skipping." "UPTIME" "$NOW_HUMAN"; sleep 10; continue; fi
 
-    # 1. HEARTBEAT
+    # 1. HEARTBEAT (UPDATED LOGIC V1.3.8)
     if [ "$HEARTBEAT" = "YES" ]; then 
         if [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
-            CAN_SEND=0
-            if [ "$HB_INTERVAL" -ge 86000 ]; then [ "$CUR_HOUR" -eq "$HB_START_HOUR" ] && CAN_SEND=1; else CAN_SEND=1; fi
-            if [ "$CAN_SEND" -eq 1 ]; then
-                LAST_HB_CHECK=$NOW_SEC
-                send_notification "💓 Heartbeat Report" "**Router:** $ROUTER_NAME\n**Status:** Operational\n**Time:** $NOW_HUMAN" "1752220" "INFO" "${HB_TARGET:-BOTH}" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN" "$DISCORD_MENTION_HB"
-                log_msg "Heartbeat sent ($HB_TARGET)." "UPTIME" "$NOW_HUMAN"
+            # Drift Correction: Advance timer by exactly one interval
+            # This ensures we stay locked to the HH:MM schedule and don't drift.
+            LAST_HB_CHECK=$((LAST_HB_CHECK + HB_INTERVAL))
+            
+            # Safety Catch-up: If system was off for a long time, reset alignment
+            if [ $((NOW_SEC - LAST_HB_CHECK)) -ge "$HB_INTERVAL" ]; then
+                 align_heartbeat 
             fi
+            
+            send_notification "💓 Heartbeat Report" "**Router:** $ROUTER_NAME\n**Status:** Operational\n**Time:** $NOW_HUMAN" "1752220" "INFO" "${HB_TARGET:-BOTH}" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN" "$DISCORD_MENTION_HB"
+            log_msg "Heartbeat sent ($HB_TARGET)." "UPTIME" "$NOW_HUMAN"
         fi
     fi
 
@@ -1034,7 +1211,7 @@ while true; do
                     read START_TIME < "$FT"; read START_SEC < "$FD"
                     DUR=$((NOW_SEC - START_SEC)); DR="$((DUR/60))m $((DUR%60))s"
                     MSG_D="**Router:** $ROUTER_NAME\n**Down at:** $START_TIME\n**Up at:** $NOW_HUMAN\n**Total Outage:** $DR"
-                    MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - Down time: $START_TIME - UP time: $NOW_HUMAN - Downtime: $DR"
+                    MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - Down time: $START_TIME - UP time: $NOW_HUMAN - Duration: $DR"
                     log_msg "[SUCCESS] INTERNET UP - Downtime: $DR" "UPTIME" "$NOW_HUMAN"
                     if [ "$IS_SILENT" -eq 0 ]; then
                         send_notification "🟢 Connectivity Restored" "$MSG_D" "3066993" "SUCCESS" "BOTH" "YES" "$MSG_T" "$DISCORD_MENTION_NET"
@@ -1051,29 +1228,77 @@ while true; do
         fi
     else EXT_UP_GLOBAL=1; fi
 
-    # 4. DEVICE MONITOR
-    if [ "$DEVICE_MONITOR" = "YES" ]; then
-        if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
-            LAST_DEV_CHECK=$NOW_SEC
-            while read -r line || [ -n "$line" ]; do
-                case "$line" in \#*|"") continue ;; esac
-                line=$(echo "$line" | tr -d '\r'); IP="${line%%@*}"; IP="${IP%% }"; IP="${IP## }"; NAME="${line#*@}"; NAME="${NAME## }"; [ "$NAME" = "$line" ] && NAME="$IP"
-                [ -n "$IP" ] && check_ip_logic "$IP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT" "$DEV_PING_TIMEOUT" &
-            done < "$IP_LIST_FILE"
-            wait
+    # --- DYNAMIC BATCH CONFIGURATION (V1.3.9 UPDATE) ---
+    # Calculates how many devices to ping in parallel based on RAM
+    BATCH_LIMIT=50 # Hard cap default
+    
+    if [ "$SCAN_BATCH_SIZE" = "0" ] || [ -z "$SCAN_BATCH_SIZE" ]; then
+        BATCH_LIMIT=999 # Effectively unlimited (Full Parallel)
+    elif [ "$SCAN_BATCH_SIZE" = "AUTO" ]; then
+        # Safety Net: Reserve 10% of Total RAM
+        SAFETY_MARGIN=$((TOTAL_RAM_KB / 10))
+        USABLE_FREE=$((CUR_FREE_RAM - SAFETY_MARGIN))
+        
+        if [ "$USABLE_FREE" -le 0 ]; then
+             BATCH_LIMIT=1 # Critical mode: 1 by 1
+        else
+             # Rule: Use remaining RAM for scanning. Approx 4000KB per ping process.
+             BATCH_LIMIT=$((USABLE_FREE / 4000)) 
+        fi
+        
+        # Clamp Values
+        if [ "$BATCH_LIMIT" -lt 5 ]; then BATCH_LIMIT=5; fi
+        if [ "$BATCH_LIMIT" -gt 50 ]; then BATCH_LIMIT=50; fi
+    else
+        # User defined fixed number
+        if echo "$SCAN_BATCH_SIZE" | grep -qE '^[0-9]+$'; then
+            BATCH_LIMIT=$SCAN_BATCH_SIZE
         fi
     fi
 
-    # 5. REMOTE MONITOR
-    if [ "$REMOTE_MONITOR" = "YES" ] && [ "$EXT_UP_GLOBAL" -eq 1 ]; then
-        if [ $((NOW_SEC - LAST_REM_CHECK)) -ge "$REM_SCAN_INTERVAL" ]; then
-            LAST_REM_CHECK=$NOW_SEC
+    # 4. DEVICE MONITOR (WITH BATCH LOGIC)
+    if [ "$DEVICE_MONITOR" = "YES" ]; then
+        if [ $((NOW_SEC - LAST_DEV_CHECK)) -ge "$DEV_SCAN_INTERVAL" ]; then
+            LAST_DEV_CHECK=$NOW_SEC
+            CURRENT_JOBS=0
             while read -r line || [ -n "$line" ]; do
                 case "$line" in \#*|"") continue ;; esac
                 line=$(echo "$line" | tr -d '\r'); IP="${line%%@*}"; IP="${IP%% }"; IP="${IP## }"; NAME="${line#*@}"; NAME="${NAME## }"; [ "$NAME" = "$line" ] && NAME="$IP"
-                [ -n "$IP" ] && check_ip_logic "$IP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT" "$REM_PING_TIMEOUT" &
+                
+                if [ -n "$IP" ]; then
+                    check_ip_logic "$IP" "$NAME" "Device" "$DEV_FAIL_THRESHOLD" "$DEV_PING_COUNT" "$DEV_PING_TIMEOUT" &
+                    CURRENT_JOBS=$((CURRENT_JOBS + 1))
+                    
+                    if [ "$CURRENT_JOBS" -ge "$BATCH_LIMIT" ]; then
+                        wait
+                        CURRENT_JOBS=0
+                    fi
+                fi
+            done < "$IP_LIST_FILE"
+            wait # Catch stragglers
+        fi
+    fi
+
+    # 5. REMOTE MONITOR (WITH BATCH LOGIC)
+    if [ "$REMOTE_MONITOR" = "YES" ] && [ "$EXT_UP_GLOBAL" -eq 1 ]; then
+        if [ $((NOW_SEC - LAST_REM_CHECK)) -ge "$REM_SCAN_INTERVAL" ]; then
+            LAST_REM_CHECK=$NOW_SEC
+            CURRENT_JOBS=0
+            while read -r line || [ -n "$line" ]; do
+                case "$line" in \#*|"") continue ;; esac
+                line=$(echo "$line" | tr -d '\r'); IP="${line%%@*}"; IP="${IP%% }"; IP="${IP## }"; NAME="${line#*@}"; NAME="${NAME## }"; [ "$NAME" = "$line" ] && NAME="$IP"
+                
+                if [ -n "$IP" ]; then
+                    check_ip_logic "$IP" "$NAME" "Remote" "$REM_FAIL_THRESHOLD" "$REM_PING_COUNT" "$REM_PING_TIMEOUT" &
+                    CURRENT_JOBS=$((CURRENT_JOBS + 1))
+                    
+                    if [ "$CURRENT_JOBS" -ge "$BATCH_LIMIT" ]; then
+                        wait
+                        CURRENT_JOBS=0
+                    fi
+                fi
             done < "$REMOTE_LIST_FILE"
-            wait
+            wait # Catch stragglers
         fi
     fi
     sleep 1
@@ -1464,7 +1689,7 @@ case "\$1" in
                 rm -rf "/tmp/netwatchdta"
                 echo -e "\033[1;33m🗑️  Removing core script...\033[0m"
                 rm -f "\$INSTALL_DIR/netwatchdta.sh"
-                echo -e "\033[1;33m🔥 Removing service...\033[0m"
+                echo -e "\033[1;33m🔥 Removing service file...\033[0m"
                 rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
                 systemctl daemon-reload
                 echo ""
