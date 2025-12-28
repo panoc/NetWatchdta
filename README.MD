@@ -16,7 +16,7 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 
 ---
 
-## ✨ Key Features (v1.3.9)
+## ✨ Key Features
 
 * **Universal Installer:** One script works on OpenWrt routers, Raspberry Pis, VPSs, and Desktop Linux.
 * **Smart Hardware Detection:** Automatically configures itself for **High Performance** (Parallel) or **Safe Mode** (Batching) based on your RAM (512MB Threshold).
