@@ -1,6 +1,3 @@
-Here is the **Raw Markdown Code** for your `README.md`. You can copy the entire block below and paste it directly into your GitHub repository file.
-
-```markdown
 # 🌐 NetWatchdta
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
