@@ -284,7 +284,7 @@ This document provides a detailed technical breakdown of **netwatchdta** resourc
 Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`) and **Standard Linux**.
 
 <details>
-<summary><strong>Click here to expand full document/strong></summary>
+<summary><strong>Click here to expand full document</strong></summary>
 
 ### 1. 💾 Disk / Flash Storage Requirements
 
