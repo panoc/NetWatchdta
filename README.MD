@@ -67,7 +67,7 @@ wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubu
 
 ```
 
-### Option 1: Linux (Desktop/Server)
+#### Option 1: Linux (Desktop/Server)
 
 *Requires `curl` and `sudo`.*
 
