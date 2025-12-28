@@ -1,8 +1,3 @@
-This corrected Markdown code fixes the rendering issues in the **Configuration Settings** table (by removing newlines inside cells), repairs the **Uninstallation** code blocks, and fully restores the detailed **Safe Device Limits** tables in the Hardware Recommendations section.
-
-You can copy this block directly into your `README.md`.
-
-```markdown
 # 🌐 NetWatchdta
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
