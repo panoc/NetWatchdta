@@ -1,3 +1,8 @@
+This corrected Markdown code fixes the rendering issues in the **Configuration Settings** table (by removing newlines inside cells), repairs the **Uninstallation** code blocks, and fully restores the detailed **Safe Device Limits** tables in the Hardware Recommendations section.
+
+You can copy this block directly into your `README.md`.
+
+```markdown
 # 🌐 NetWatchdta
 
 > **Network Monitor with Real Time Alerts for OpenWrt & Linux**
@@ -16,13 +21,13 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features (v1.3.9)
 
 * **Universal Installer:** One script works on OpenWrt routers, Raspberry Pis, VPSs, and Desktop Linux.
-* **Dual Notifications:** Send alerts to **Discord** (with rich embeds) and **Telegram** simultaneously or selectively.
 * **Smart Hardware Detection:** Automatically configures itself for **High Performance** (Parallel) or **Safe Mode** (Batching) based on your RAM (512MB Threshold).
 * **Self-Healing Config:** The installer automatically detects missing settings in your configuration file during upgrades and patches them with safe defaults.
-* **Smart Batch Scanning:** Dynamically calculates how many devices to ping simultaneously based on **Free RAM**, reserving a 10% safety margin to prevent crashes on low-end hardware.
+* **Smart Batch Scanning:** (New in v1.3.9) Dynamically calculates how many devices to ping simultaneously based on **Free RAM**, reserving a 10% safety margin to prevent crashes on low-end hardware.
+* **Dual Notifications:** Send alerts to **Discord** (with rich embeds) and **Telegram** simultaneously or selectively.
 * **Encryption Vault:** Credentials (tokens/webhooks) are encrypted using OpenSSL AES-256 and locked to your specific hardware.
 * **Offline Buffer:** If the internet goes down, alerts are queued and delivered in bulk once connectivity is restored.
 * **Silent Mode:** Mute alerts during specific hours (e.g., sleeping time), but keep logging them to the buffer.
@@ -68,7 +73,6 @@ sudo wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "[https://raw.g
 ### Option 2: OpenWrt (Routers)
 
 *No sudo required.*
-*Requires `Curl` ONLY if you have issues with the default `uclient-fetch` or want to manually switch.*
 
 ```bash
 wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "[https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/install_netwatchdta.sh)" && sh /tmp/install_netwatchdta.sh
@@ -77,7 +81,7 @@ wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "[https://raw.github
 
 ### The interactive installer will:
 
-1. Check system requirements (Storage/RAM) and automatically set `EXEC_METHOD` (Notification Mode) and `SCAN_BATCH_SIZE` (Scanning Mode).
+1. Check system requirements (Storage/RAM) and automatically set `EXEC_METHOD` and `SCAN_BATCH_SIZE`.
 2. Ask for your **Notification Credentials** (Discord/Telegram).
 3. Perform a live connectivity test.
 4. Select basic settings (Silent Hours, Heartbeat).
@@ -281,7 +285,7 @@ wget --no-check-certificate -qO /tmp/uninstall_netwatchdta.sh "[https://raw.gith
 ```
 
 * **OpenWrt:** ```bash 
-wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "[https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh)" && sh /tmp/uninstall_netwatchdta_wrt.sh
+wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "[https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta_wrt.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta_wrt.sh)" && sh /tmp/uninstall_netwatchdta_wrt.sh
 
 ```
 
@@ -373,26 +377,40 @@ Calculations are provided for **OpenWrt** (using both `uclient-fetch` and `curl`
 
 ---
 
-### 📈 Hardware Recommendations
+### 📈 Hardware Recommendations / Safe Device Limits Table
 
-### Recommended Configuration by Device
+To ensure stability, choose the configuration that matches your hardware capabilities.
 
-| Device Class | RAM | Scan Mode (`SCAN_BATCH_SIZE`) | Notif Mode (`EXEC_METHOD`) | Safe Device Limit |
-| --- | --- | --- | --- | --- |
-| **Legacy / Tiny**<br>
+#### **1. Method 1: Parallel Mode**
 
-<br>*(WR841N, ER-X, Pi Zero 1)* | 128MB - 256MB | **AUTO** (Batch ~7-15) | **Queue** (2) | **50+** |
-| **Mid-Range**<br>
+* **Setting:** `EXEC_METHOD=1`
+* **Best for:** Devices with **>512MB RAM**.
+* **Behavior:** Instant alerts. High RAM usage during mass outages.
 
-<br>*(Pi 3, Xiaomi 4A, Gl.iNet)* | 256MB - 512MB | **AUTO** (Batch ~25-40) | **Queue** (2) | **100+** |
-| **High-End / x86**<br>
+| Chipset Tier | Example Devices | RAM Spike (50 Events) | Safe Limit (Single Notif) | Safe Limit (Dual Notif) | Recommended? |
+| --- | --- | --- | --- | --- | --- |
+| **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **CRITICAL (~125 MB)** | **~10 Devices** | **~5 Devices** | ❌ **NO** |
+| **Mid-Range (ARM)** | Pi Zero 2, Pi 3, Flint 2 | **High (~150 MB)** | **~40 Devices** | **~25 Devices** | ⚠️ **CAUTION** |
+| **High-End (x86/ARM)** | N100, Pi 4/5, NanoPi R6 | **Low Load** | **200+ Devices** | **150+ Devices** | ✅ **YES** |
 
-<br>*(Pi 4/5, N100, NanoPi R6)* | 512MB+ | **0** (Parallel) | **Parallel** (1) | **Unlimited** |
+#### **2. Method 2: Queue Mode**
 
-> **⚠️ The "Golden Rule" of Stability**
-> If you are ever in doubt, or if your device feels sluggish:
-> **Set `SCAN_BATCH_SIZE=AUTO`.**
-> It is better to check your 100 devices in **5 seconds** (Batch) than to check them in **1 second** (Parallel) and crash the router.
+* **Setting:** `EXEC_METHOD=2`
+* **Best for:** Devices with **<512MB RAM**.
+* **Behavior:** Alerts queue up one by one. Zero RAM spikes.
+
+| Chipset Tier | Example Devices | RAM Spike (50 Events) | Safe Limit (Single Notif) | Safe Limit (Dual Notif) | Recommended? |
+| --- | --- | --- | --- | --- | --- |
+| **Legacy (MIPS)** | Ubiquiti ER-X, Xiaomi 4A | **~17 MB (Safe)** | **~60 Devices** | **~35 Devices** | ✅ **YES** |
+| **Mid-Range (ARM)** | Pi Zero 2, Pi 3, Flint 2 | **~20 MB (Safe)** | **100+ Devices** | **~60 Devices** | ✅ **YES** |
+| **High-End (x86/ARM)** | N100, Pi 4/5, NanoPi R6 | **Negligible** | **Unlimited** | **Unlimited** | ❌ **Unnecessary** |
+
+> **ℹ️ Note on Safe Limits:**
+> * **Single Notif:** Sending to Discord **OR** Telegram.
+> * **Dual Notif:** Sending to Discord **AND** Telegram (Doubles the workload).
+> * **Limit Reached?** If you exceed the "Safe Limit" in Queue Mode, the router won't crash, but the last alert might arrive 2-3 minutes late.
+> 
+> 
 
 <details>
 <summary><strong>💡 Final Thoughts & Advice</strong></summary>
@@ -435,7 +453,5 @@ This script uses **OpenSSL AES-256** to encrypt your Discord Webhook and Telegra
 
 This project is licensed under the **GNU General Public License v3.0**.
 Copyright (C) 2025 panoc
-
-```
 
 ```
