@@ -56,7 +56,7 @@ Originally designed for OpenWrt routers, **v1.x** has been re-engineered as a **
 
 The installer will automatically detect your OS, install necessary dependencies (`curl`, `openssl`, etc.), and set up the service.
 
-#### OpenWrt (Routers)
+### OpenWrt (Routers)
 
 *No sudo required.*
 
@@ -67,7 +67,7 @@ wget --no-check-certificate -qO /tmp/install_netwatchdta.sh "https://raw.githubu
 
 ```
 
-#### Linux (Desktop/Server)
+### Linux (Desktop/Server)
 
 *Requires `curl` and `sudo`.*
 
