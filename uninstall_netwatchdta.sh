@@ -3,7 +3,7 @@
 #  NETWATCHDTA UNIVERSAL UNINSTALLER
 # ==============================================================================
 #  Description: Emergency removal tool for netwatchdta
-#  Version: 1.4.1 (Fixes TTY read error)
+#  Version: 1.4.2 (Fixed I/O Error)
 #  Supported OS: OpenWrt & Linux (Systemd)
 #  Copyright (C) 2025 panoc
 # ==============================================================================
@@ -74,8 +74,8 @@ echo ""
 
 while true; do
     printf "${BOLD}Choice [1-3]: ${NC}"
-    # FIX: Removed </dev/tty to prevent I/O errors in some shells
-    read choice 
+    # FIX: Read from standard input (removes </dev/tty dependency)
+    read choice
     if echo "$choice" | grep -qE "^[1-3]$"; then
         break
     fi
@@ -86,9 +86,11 @@ done
 # ==============================================================================
 case "$choice" in
     1)
-        # --- FULL UNINSTALL ---
+        # --- OPTION 1: FULL UNINSTALL ---
         echo ""
         echo -e "${YELLOW}🛑 Stopping service...${NC}"
+        
+        # Stop & Disable Service
         if [ "$SERVICE_TYPE" = "PROCD" ]; then
             if [ -f "$SERVICE_PATH" ]; then
                 "$SERVICE_PATH" stop >/dev/null 2>&1
@@ -100,29 +102,32 @@ case "$choice" in
         fi
 
         echo -e "${YELLOW}🧹 Cleaning up files...${NC}"
-        # Remove Main Directory
+        
+        # Remove Main Directory (Configs & Scripts)
         if [ -d "$INSTALL_DIR" ]; then
             rm -rf "$INSTALL_DIR"
             echo "   - Removed $INSTALL_DIR"
         fi
         
-        # Remove Temp Logs
+        # Remove Temp Logs & Buffers
         if [ -d "/tmp/netwatchdta" ]; then
             rm -rf "/tmp/netwatchdta"
             echo "   - Removed /tmp/netwatchdta"
         fi
 
-        echo -e "${YELLOW}🔥 Removing system service...${NC}"
+        echo -e "${YELLOW}🔥 Removing system integration...${NC}"
+        
+        # Remove Service File
         if [ -f "$SERVICE_PATH" ]; then
             rm -f "$SERVICE_PATH"
-            echo "   - Removed $SERVICE_PATH"
+            echo "   - Removed service file"
         fi
         
-        # Linux Specific: Remove CLI Wrapper
+        # Linux Specific: Remove CLI Wrapper and Reload
         if [ "$OS_TYPE" = "LINUX" ]; then
             if [ -f "$CLI_PATH" ]; then
                 rm -f "$CLI_PATH"
-                echo "   - Removed CLI wrapper"
+                echo "   - Removed CLI command 'netwatchdta'"
             fi
             systemctl daemon-reload >/dev/null 2>&1
         fi
@@ -132,9 +137,11 @@ case "$choice" in
         ;;
 
     2)
-        # --- KEEP SETTINGS ---
+        # --- OPTION 2: KEEP SETTINGS ---
         echo ""
         echo -e "${YELLOW}🛑 Stopping service...${NC}"
+        
+        # Stop & Disable Service
         if [ "$SERVICE_TYPE" = "PROCD" ]; then
             if [ -f "$SERVICE_PATH" ]; then
                 "$SERVICE_PATH" stop >/dev/null 2>&1
@@ -149,21 +156,25 @@ case "$choice" in
         rm -rf "/tmp/netwatchdta"
 
         echo -e "${YELLOW}🗑️  Removing logic engine...${NC}"
+        # Only remove the script, keep the directory
         if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
             rm -f "$INSTALL_DIR/netwatchdta.sh"
-            echo "   - Removed logic engine"
+            echo "   - Removed engine script"
         fi
 
-        echo -e "${YELLOW}🔥 Removing system service...${NC}"
+        echo -e "${YELLOW}🔥 Removing system integration...${NC}"
+        
+        # Remove Service File
         if [ -f "$SERVICE_PATH" ]; then
             rm -f "$SERVICE_PATH"
             echo "   - Removed service file"
         fi
         
+        # Linux Specific: Remove CLI Wrapper
         if [ "$OS_TYPE" = "LINUX" ]; then
             if [ -f "$CLI_PATH" ]; then
                 rm -f "$CLI_PATH"
-                echo "   - Removed CLI wrapper"
+                echo "   - Removed CLI command"
             fi
             systemctl daemon-reload >/dev/null 2>&1
         fi
@@ -171,6 +182,7 @@ case "$choice" in
         echo ""
         echo -e "${GREEN}✅ Logic removed.${NC}"
         echo -e "${CYAN}ℹ️  Settings preserved in: $INSTALL_DIR${NC}"
+        echo -e "   (settings.conf, device_ips.conf, remote_ips.conf, .vault.enc)"
         ;;
 
     *)
