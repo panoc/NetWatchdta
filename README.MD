@@ -267,12 +267,12 @@ If the installation is broken, use the remote uninstaller:
 
 * **OpenWrt:** 
 ```bash 
-`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sh /tmp/uninstall_netwatchdta_wrt.sh`
+wget --no-check-certificate -qO /tmp/uninstall_netwatchdta_wrt.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sh /tmp/uninstall_netwatchdta_wrt.sh
 ```
 
 * **Linux:** 
 ```bash 
-`wget --no-check-certificate -qO /tmp/uninstall_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sudo bash /tmp/uninstall_netwatchdta.sh`
+wget --no-check-certificate -qO /tmp/uninstall_netwatchdta.sh "https://raw.githubusercontent.com/panoc/NetWatchdta/refs/heads/main/uninstall_netwatchdta.sh" && sudo bash /tmp/uninstall_netwatchdta.sh
 ```
 
 
