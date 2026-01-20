@@ -1,6 +1,15 @@
-# 🌐 NetWatchdta
+<div align="center">
+  <img src="assets/favicon.png" height="100" alt="Logo">
+  <br>
+<h1>
+  <strong>NetWatchdta</strong>
+</h1>
 
-> **Network Monitor with Real Time Alerts for OpenWrt & Linux**
+  <p>
+    <b>Network Monitor with Real Time Alerts for OpenWrt & Linux.</b>
+  </p>
+
+</div>
 
 <p align="left">
   <img src="https://img.shields.io/badge/OS-OpenWrt%20%7C%20Linux-1272ba?style=flat-square&logo=openwrt&logoColor=white">
