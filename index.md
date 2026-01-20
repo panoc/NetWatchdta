@@ -1,12 +1,8 @@
 ---
 layout: default
-title: NetWatchdta
-description: Lightweight Network Monitor & Alerting for OpenWrt and Linux
 ---
 
-# 🌐 NetWatchdta
-
-> **The lightweight, automated network monitoring & alerting tool for OpenWrt, Linux, and Embedded Systems.**
+# **NetWatchdta The lightweight, automated network monitoring & alerting tool for OpenWrt, Linux, and Embedded Systems.**
 
 [![OS](https://img.shields.io/badge/OS-OpenWrt%20%7C%20Linux-1272ba?style=flat-square&logo=openwrt&logoColor=white)](https://github.com/panoc/NetWatchdta)
 [![Network Monitoring](https://img.shields.io/badge/Network-Monitoring%20and%20Logs-006400?style=flat-square&logo=activity&logoColor=white)](https://github.com/panoc/NetWatchdta)
