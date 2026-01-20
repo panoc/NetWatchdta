@@ -13,8 +13,6 @@ description: Lightweight Network Monitor & Alerting for OpenWrt and Linux
 [![Alerts](https://img.shields.io/badge/Alerts-Discord%20%26%20Telegram-7289da?style=flat-square&logo=discord&logoColor=white)](https://github.com/panoc/NetWatchdta)
 [![License](https://img.shields.io/github/license/panoc/NetWatchdta?style=flat-square)](https://github.com/panoc/NetWatchdta/blob/main/LICENSE)
 
-[View on GitHub](https://github.com/panoc/NetWatchdta){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
-
 ---
 
 ## 🚀 Why NetWatchdta?
