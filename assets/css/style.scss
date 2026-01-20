@@ -1,0 +1,132 @@
+---
+---
+
+/* IMPORTS THE DEFAULT CAYMAN THEME FIRST */
+@import "{{ site.theme }}";
+
+/* --- CUSTOM COLORS START HERE --- */
+/* --- 1. Top Banner Title (Project Name) --- */
+.project-name {
+  color: #FFFDFC !important; /* White */
+  
+  /* FLEXBOX MAGIC: Centers everything perfectly */
+  display: flex !important;
+  align-items: center !important;     /* Vertical center */
+  justify-content: center !important; /* Horizontal center */
+}
+
+/* --- 2. The Logo Icon (Pseudo-element) --- */
+.project-name::before {
+  content: "";
+  display: block;                /* Acts as a proper box now */
+  margin-right: 10px;            /* Space between logo and text */
+  
+  /* Size of the logo */
+  width: 37px; 
+  height: 37px;
+  
+  /* Background Image Settings */
+  background-image: url('{{ site.github.url }}/assets/favicon.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  position: relative;
+  top: 2px;
+}
+
+/* 1. The Big Header Gradient */
+.page-header {
+  background-color: #1e2327; 
+  background-image: linear-gradient(120deg, #420808, #1a1a1a);
+}
+
+/* 2. The Title Text (Project Name) */
+.project-name {
+  color: #FFFDFC; 
+}
+
+/* 3. The Tagline Text */
+.project-tagline {
+  color: #aeb4b9; 
+}
+
+/* 4. Buttons (Download/View on GitHub) */
+.btn {
+  background-color: #f6f6f6;
+  color: #1e2327; 
+  border-color: #DDC9C9;
+}
+
+/* 5. Links in the main text */
+.main-content a {
+  color: #d92b2b; 
+}
+
+/* --- Main Page Background --- */
+body {
+ /* background-color: #fcf7f2; */
+ /* background-color: #FFFBF7; */
+  background-color: #FFFDFC; 
+  color: #333333;            
+}
+
+/* --- Blockquote (The > sections) --- */
+blockquote {
+  border-left: 5px solid #DDC9C9 !important;
+  color: #000000 !important; 
+}
+
+/* FORCE BLACK TEXT on everything inside quotes */
+blockquote p, 
+blockquote ul, 
+blockquote li,
+blockquote strong {
+  color: #000000 !important;
+}
+
+/* --- Code Blocks (Bash, JSON, etc.) --- */
+pre, code {
+  background-color: #F4E9E6 !important; 
+  color: #1a1a1a !important; 
+  border-color : #DDC9C9 !important; 
+  
+}
+
+/* --- Header Buttons --- */
+
+/* 1. Default State */
+.btn {
+  background-color: #FFFDFC !important;  
+  border: 1px solid #dcdcdc !important;
+}
+
+/* 2. Hover State */
+.btn:hover {
+  background-color: #564141 !important; 
+}
+
+/* --- 1. Top Banner Title (Project Name) --- */
+.project-name {
+  color: #FFFDFC !important; 
+}
+
+/* --- 2. Content Headers (The #, ##, ### in your README) --- */
+.main-content h1, 
+.main-content h2, 
+.main-content h3, 
+.main-content h4, 
+.main-content h5, 
+.main-content h6 {
+  color: #333333 !important; 
+}
+
+/* --- Adjust Page Width --- */
+.main-content {
+  max-width: 72rem !important; 
+}
+/* --- Reduce Header Height --- */
+.page-header {
+  /* Default is 5rem. We change it to 2rem to make it much shorter. */
+  padding-top: 2rem !important;
+  padding-bottom: 2rem !important;
+}
