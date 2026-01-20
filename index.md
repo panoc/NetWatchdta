@@ -36,54 +36,10 @@ It continuously watches your:
 | **🛠️ Universal Install** | One script handles everything. Detects OS, installs dependencies, and configures `procd` or `systemd`. |
 | **❤️ Auto-Healing** | The config file "heals" itself during updates, preserving your settings while adding new required defaults. |
 
----
-
-## 📥 Installation
-
-Get up and running in seconds with the universal installer.
-
-### Quick Install (curl)
-```bash
-sh -c "$(curl -fsSL [https://raw.githubusercontent.com/panoc/NetWatchdta/main/install_netwatchdta.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/main/install_netwatchdta.sh))"
-
-```
-
-### Quick Install (wget)
-
-```bash
-sh -c "$(wget -O- [https://raw.githubusercontent.com/panoc/NetWatchdta/main/install_netwatchdta.sh](https://raw.githubusercontent.com/panoc/NetWatchdta/main/install_netwatchdta.sh))"
-
-```
-
-*The installer will automatically detect if you are running OpenWrt or a standard Linux distro (Ubuntu, Debian, CentOS, etc.) and set up the service accordingly.*
 
 ---
 
-## ⚙️ Configuration
-
-After installation, you can customize your monitoring targets and alert webhooks in the configuration file.
-
-**File Location:**
-
-* **OpenWrt:** `/etc/config/netwatchdta`
-* **Linux:** `/etc/netwatchdta/netwatchdta.conf`
-
-### Example Setup
-
-1. Open the config file.
-2. Add your **Discord Webhook URL** or **Telegram Bot Token**.
-3. Add IP addresses or domains to the `PING_TARGETS` list.
-4. Restart the service.
-
-```bash
-# Restart command (works on both OpenWrt & Linux)
-/etc/init.d/netwatchdta restart
-
-```
-
----
-
-## 📱 Screenshots & Alerts
+## 📱 Alerts
 
 *Visual feedback directly to your phone or desktop.*
 
@@ -99,8 +55,3 @@ We welcome contributions! If you have ideas for new features or bug fixes, pleas
 
 [Report Bug](https://www.google.com/search?q=https://github.com/panoc/NetWatchdta/issues) · [Request Feature](https://www.google.com/search?q=https://github.com/panoc/NetWatchdta/issues)
 
-<footer class="site-footer">
-<span class="site-footer-owner"><a href="https://github.com/panoc/NetWatchdta">NetWatchdta</a> is maintained by <a href="https://github.com/panoc">panoc</a>.</span>
-</footer>
-
-```
