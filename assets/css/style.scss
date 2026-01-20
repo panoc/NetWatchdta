@@ -7,7 +7,7 @@
 /* --- CUSTOM COLORS START HERE --- */
 /* --- 1. Top Banner Title (Project Name) --- */
 .project-name {
-  color: #FFFDFC !important; /* White */
+  color: #F7FFFD !important; /* White */
   
   /* FLEXBOX MAGIC: Centers everything perfectly */
   display: flex !important;
@@ -37,12 +37,12 @@
 /* 1. The Big Header Gradient */
 .page-header {
   background-color: #1e2327; 
-  background-image: linear-gradient(120deg, #155B94, #15AFAF);
+  background-image: linear-gradient(120deg, #155B94, #129191);
 }
 
 /* 2. The Title Text (Project Name) */
 .project-name {
-  color: #FFFDFC; 
+  color: #F7FFFD; 
 }
 
 /* 3. The Tagline Text */
@@ -66,7 +66,7 @@
 body {
  /* background-color: #fcf7f2; */
  /* background-color: #FFFBF7; */
-  background-color: #FFFDFC; 
+  background-color: #F7FFFD; 
   color: #333333;            
 }
 
@@ -96,7 +96,7 @@ pre, code {
 
 /* 1. Default State */
 .btn {
-  background-color: #FFFDFC !important;  
+  background-color: #F7FFFD !important;  
   border: 1px solid #dcdcdc !important;
 }
 
@@ -107,7 +107,7 @@ pre, code {
 
 /* --- 1. Top Banner Title (Project Name) --- */
 .project-name {
-  color: #FFFDFC !important; 
+  color: #F7FFFD !important; 
 }
 
 /* --- 2. Content Headers (The #, ##, ### in your README) --- */
