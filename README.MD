@@ -450,4 +450,4 @@ This script uses **OpenSSL AES-256** to encrypt your Discord Webhook and Telegra
 This project is licensed under the **GNU General Public License v3.0**.
 Copyright (C) 2025 panoc
 
-```
+
