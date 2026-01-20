@@ -4,7 +4,6 @@
 <h1>
   <strong>NetWatchdta</strong>
 </h1>
-
   <p>
     <b>Network Monitor with Real Time Alerts for OpenWrt & Linux.</b>
   </p>
