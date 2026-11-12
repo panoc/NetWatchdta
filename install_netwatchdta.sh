@@ -2,7 +2,7 @@
 # netwatchdta Installer - Automated Setup for OpenWrt & Linux (Universal)
 # Copyright (C) 2025 panoc
 # Licensed under the GNU General Public License v3.0
-SCRIPT_VERSION="1.4.1"
+SCRIPT_VERSION="1.4.2"
 
 # ==============================================================================
 #  SELF-CLEANUP MECHANISM
@@ -31,7 +31,6 @@ WHITE='\033[1;37m'  # Bold White (High Contrast)
 # ==============================================================================
 #  OS DETECTION ENGINE
 # ==============================================================================
-# Detects if running on OpenWrt or Standard Linux (Systemd)
 OS_TYPE="UNKNOWN"
 PKG_MANAGER=""
 INSTALL_DIR=""
@@ -39,16 +38,21 @@ SERVICE_TYPE=""
 
 if [ -f /etc/openwrt_release ]; then
     OS_TYPE="OPENWRT"
-    PKG_MANAGER="opkg"
     INSTALL_DIR="/root/netwatchdta"
     SERVICE_TYPE="PROCD"
+    
+    # Check whether OpenWrt is using the newer apk package manager or traditional opkg
+    if command -v apk >/dev/null 2>&1; then
+        PKG_MANAGER="apk"
+    else
+        PKG_MANAGER="opkg"
+    fi
 elif [ -f /etc/os-release ]; then
     . /etc/os-release
     OS_TYPE="LINUX"
     INSTALL_DIR="/opt/netwatchdta"
     SERVICE_TYPE="SYSTEMD"
     
-    # Detect Package Manager
     case "$ID" in
         debian|ubuntu|linuxmint|kali|raspbian|pop) PKG_MANAGER="apt" ;;
         fedora|centos|rhel|almalinux|rocky) PKG_MANAGER="dnf" ;;
@@ -59,7 +63,6 @@ elif [ -f /etc/os-release ]; then
     esac
 else
     echo -e "${RED}❌ Critical Error: Unsupported Operating System.${NC}"
-    echo -e "   Supported: OpenWrt, Ubuntu, Debian, CentOS, Fedora, Arch, etc."
     exit 1
 fi
 
@@ -189,37 +192,40 @@ echo -e "\n${BOLD}📦 Checking system readiness...${NC}"
 
 # --- OPENWRT SPECIFIC CHECKS ---
 if [ "$OS_TYPE" = "OPENWRT" ]; then
-    # 1. Check Flash Storage (Root partition)
     FREE_FLASH_KB=$(df / | awk 'NR==2 {print $4}')
     MIN_FLASH_KB=3072 # 3MB Threshold
 
-    # 2. Check RAM (/tmp partition)
     FREE_RAM_KB=$(df /tmp | awk 'NR==2 {print $4}')
     MIN_RAM_KB=4096 # 4MB Threshold
 
-    # 3. Check Physical Memory for Execution Method Auto-Detection
-    # UPDATED LOGIC v1.3.9:
-    # >= 512MB (524288 kB) = High End (Full Parallel, No Batching)
-    # <  512MB = Low End (Smart Batching, Queue Notifications)
     TOTAL_PHY_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
     
     if [ "$TOTAL_PHY_MEM_KB" -ge 524288 ]; then
         AUTO_EXEC_METHOD="1"
-        AUTO_BATCH_SIZE="0" # 0 means Unlimited/Parallel
+        AUTO_BATCH_SIZE="0"
         EXEC_MSG="High Performance (Parallel Scanning + Parallel Notif)"
     else
         AUTO_EXEC_METHOD="2"
-        AUTO_BATCH_SIZE="AUTO" # Will trigger dynamic calculation with 10% Safety Net
+        AUTO_BATCH_SIZE="AUTO"
         EXEC_MSG="Safe Mode (Smart Batching + Queue Notif)"
     fi
 
-    # 4. Define Dependency List (OpenWrt)
+    # Define Dependency List based on package manager flavor
     MISSING_DEPS=""
-    if ! command -v uclient-fetch >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then MISSING_DEPS="$MISSING_DEPS curl"; fi
-    [ -f /etc/ssl/certs/ca-certificates.crt ] || command -v opkg >/dev/null && opkg list-installed | grep -q ca-bundle || MISSING_DEPS="$MISSING_DEPS ca-bundle"
-    command -v openssl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS openssl-util"
+    if ! command -v uclient-fetch >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then 
+        MISSING_DEPS="$MISSING_DEPS curl" 
+    fi
 
-    # RAM Guard Check
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        # Newer OpenWrt (apk)
+        command -v openssl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS openssl-util"
+        [ -f /etc/ssl/certs/ca-certificates.crt ] || MISSING_DEPS="$MISSING_DEPS ca-certificates"
+    else
+        # Older OpenWrt (opkg)
+        [ -f /etc/ssl/certs/ca-certificates.crt ] || opkg list-installed | grep -q ca-bundle || MISSING_DEPS="$MISSING_DEPS ca-bundle"
+        command -v openssl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS openssl-util"
+    fi
+
     if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
         echo -e "${RED}❌ ERROR: Insufficient RAM for operations!${NC}"
         echo -e "${YELLOW}Available: $((FREE_RAM_KB / 1024))MB | Required: 4MB${NC}"
@@ -259,6 +265,10 @@ if [ -n "$MISSING_DEPS" ]; then
                 opkg update --no-check-certificate > /dev/null 2>&1
                 opkg install --no-check-certificate $MISSING_DEPS > /tmp/nwdta_install_err.log 2>&1
                 ;;
+            apk)
+                apk update > /dev/null 2>&1
+                apk add $MISSING_DEPS > /tmp/nwdta_install_err.log 2>&1
+                ;;
             apt)
                 apt-get update && apt-get install -y $MISSING_DEPS
                 ;;
@@ -271,12 +281,8 @@ if [ -n "$MISSING_DEPS" ]; then
             zypper)
                 zypper install -y $MISSING_DEPS
                 ;;
-            apk)
-                apk add $MISSING_DEPS
-                ;;
             *)
                 echo -e "${RED}❌ Auto-install not supported for this OS.${NC}"
-                echo -e "   Please install manually: $MISSING_DEPS"
                 exit 1
                 ;;
          esac
