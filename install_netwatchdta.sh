@@ -2,7 +2,7 @@
 # netwatchdta Installer - Automated Setup for OpenWrt & Linux (Universal)
 # Copyright (C) 2025-2026 panoc
 # Licensed under the GNU General Public License v3.0
-SCRIPT_VERSION="1.5.1"
+SCRIPT_VERSION="1.6.0"
 
 # ==============================================================================
 #  SELF-CLEANUP MECHANISM
@@ -10,8 +10,12 @@ SCRIPT_VERSION="1.5.1"
 # This ensures the installer script deletes itself after execution to keep
 # the /tmp directory clean.
 SCRIPT_NAME="$0"
+SCRIPT_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 cleanup() {
-    rm -f "$SCRIPT_NAME"
+    # Only self-delete when the installer was run from /tmp
+    case "$SCRIPT_DIR" in
+        /tmp|/tmp/*) [ -f "$SCRIPT_NAME" ] && rm -f "$SCRIPT_NAME" ;;
+    esac
     exit
 }
 trap cleanup INT TERM EXIT
@@ -63,8 +67,8 @@ elif [ -f /etc/os-release ]; then
         *) PKG_MANAGER="unknown" ;;
     esac
 else
-    echo -e "${RED}❌ Critical Error: Unsupported Operating System.${NC}"
-    echo -e "   Supported: OpenWrt, Ubuntu, Debian, CentOS, Fedora, Arch, etc."
+    printf '%b\n' "${RED}❌ Critical Error: Unsupported Operating System.${NC}"
+    printf '%b\n' "   Supported: OpenWrt, Ubuntu, Debian, CentOS, Fedora, Arch, etc."
     exit 1
 fi
 
@@ -173,27 +177,27 @@ safe_fetch() {
 # ==============================================================================
 #  INSTALLER HEADER
 # ==============================================================================
-echo -e "${BLUE}=======================================================${NC}"
-echo -e "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v$SCRIPT_VERSION"
-echo -e "${BLUE}⚖️  License: GNU GPLv3${NC}"
-echo -e "${BLUE}=======================================================${NC}"
-echo -e "${WHITE}🖥️  System Detected : ${GREEN}$OS_TYPE${NC}"
-echo -e "${WHITE}📦 Package Manager : ${GREEN}$PKG_MANAGER${NC}"
-echo -e "${WHITE}📂 Install Path    : ${GREEN}$INSTALL_DIR${NC}"
-echo -e "${WHITE}⚙️  Service Manager : ${GREEN}$SERVICE_TYPE${NC}"
+printf '%b\n' "${BLUE}=======================================================${NC}"
+printf '%b\n' "${BOLD}${CYAN}🚀 netwatchdta Universal Setup${NC} v$SCRIPT_VERSION"
+printf '%b\n' "${BLUE}⚖️  License: GNU GPLv3${NC}"
+printf '%b\n' "${BLUE}=======================================================${NC}"
+printf '%b\n' "${WHITE}🖥️  System Detected : ${GREEN}$OS_TYPE${NC}"
+printf '%b\n' "${WHITE}📦 Package Manager : ${GREEN}$PKG_MANAGER${NC}"
+printf '%b\n' "${WHITE}📂 Install Path    : ${GREEN}$INSTALL_DIR${NC}"
+printf '%b\n' "${WHITE}⚙️  Service Manager : ${GREEN}$SERVICE_TYPE${NC}"
 echo ""
 
 # Root Check
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${RED}❌ Permission Denied!${NC}"
-    echo -e "   You must run this installer as ${BOLD}root${NC} (or use sudo)."
+    printf '%b\n' "${RED}❌ Permission Denied!${NC}"
+    printf '%b\n' "   You must run this installer as ${BOLD}root${NC} (or use sudo)."
     exit 1
 fi
 
 # --- 0. PRE-INSTALLATION CONFIRMATION ---
 ask_yn "❓ This will begin the installation process. Continue?"
 if [ "$ANSWER_YN" = "n" ]; then
-    echo -e "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
+    printf '%b\n' "${RED}❌ Installation aborted by user. Cleaning up...${NC}"
     exit 0
 fi
 
@@ -204,7 +208,15 @@ fi
 CONFIG_FILE="$INSTALL_DIR/settings.conf"
 IP_LIST_FILE="$INSTALL_DIR/device_ips.conf"
 REMOTE_LIST_FILE="$INSTALL_DIR/remote_ips.conf"
-VAULT_FILE="$INSTALL_DIR/.vault.enc"
+VAULT_FILE="$INSTALL_DIR/.vault.enc"   # legacy (<=1.5.x), migrated + removed on upgrade
+CRED_FILE="$INSTALL_DIR/credentials.conf"
+COMMON_LIB="$INSTALL_DIR/nwdta_common.sh"
+
+# openssl is only needed to migrate an old encrypted vault (<=1.5.x) that hasn't been migrated yet
+NEED_OPENSSL=0
+if [ -f "$VAULT_FILE" ] && [ ! -f "$CRED_FILE" ] && ! command -v openssl >/dev/null 2>&1; then
+    NEED_OPENSSL=1
+fi
 SERVICE_NAME="netwatchdta"
 SERVICE_PATH="/etc/init.d/$SERVICE_NAME"
 
@@ -214,7 +226,7 @@ mkdir -p "/tmp/netwatchdta"
 # ==============================================================================
 #  STEP 1: SYSTEM READINESS CHECKS
 # ==============================================================================
-echo -e "\n${BOLD}📦 Checking system readiness...${NC}"
+printf '%b\n' "\n${BOLD}📦 Checking system readiness...${NC}"
 
 # --- OPENWRT SPECIFIC CHECKS ---
 if [ "$OS_TYPE" = "OPENWRT" ]; then
@@ -241,7 +253,12 @@ if [ "$OS_TYPE" = "OPENWRT" ]; then
 
     # 4. Define Dependency List (OpenWrt)
     MISSING_DEPS=""
-    if ! command -v uclient-fetch >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then MISSING_DEPS="$MISSING_DEPS curl"; fi
+    # Discord/ntfy/Telegram need custom HTTP headers. Use uclient-fetch only if it supports them, else curl.
+    if ! command -v curl >/dev/null 2>&1; then
+        if ! { command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q -- "--header"; }; then
+            MISSING_DEPS="$MISSING_DEPS curl"
+        fi
+    fi
     
     # Check for certificates regardless of package manager
     if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
@@ -252,18 +269,15 @@ if [ "$OS_TYPE" = "OPENWRT" ]; then
         fi
     fi
     
-    command -v openssl >/dev/null 2>&1 || {
-        if command -v apk >/dev/null 2>&1; then
-            MISSING_DEPS="$MISSING_DEPS openssl"
-        else
-            MISSING_DEPS="$MISSING_DEPS openssl-util"
-        fi
-    }
+
+    if [ "$NEED_OPENSSL" -eq 1 ]; then
+        if command -v apk >/dev/null 2>&1; then MISSING_DEPS="$MISSING_DEPS openssl"; else MISSING_DEPS="$MISSING_DEPS openssl-util"; fi
+    fi
 
     # RAM Guard Check
     if [ "$FREE_RAM_KB" -lt "$MIN_RAM_KB" ]; then
-        echo -e "${RED}❌ ERROR: Insufficient RAM for operations!${NC}"
-        echo -e "${YELLOW}Available: $((FREE_RAM_KB / 1024))MB | Required: 4MB${NC}"
+        printf '%b\n' "${RED}❌ ERROR: Insufficient RAM for operations!${NC}"
+        printf '%b\n' "${YELLOW}Available: $((FREE_RAM_KB / 1024))MB | Required: 4MB${NC}"
         exit 1
     fi
 
@@ -276,24 +290,27 @@ else
     
     MISSING_DEPS=""
     command -v curl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS curl"
-    command -v openssl >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS openssl"
+    [ "$NEED_OPENSSL" -eq 1 ] && MISSING_DEPS="$MISSING_DEPS openssl"
     # Ensure ping is available (some minimal containers miss it)
-    command -v ping >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS iputils-ping" 
+    if ! command -v ping >/dev/null 2>&1; then
+        if [ "$PKG_MANAGER" = "apt" ]; then MISSING_DEPS="$MISSING_DEPS iputils-ping"; else MISSING_DEPS="$MISSING_DEPS iputils"; fi
+    fi
 fi
 
 # --- DEPENDENCY INSTALLATION LOGIC ---
 if [ -n "$MISSING_DEPS" ]; then
-    echo -e "${CYAN}🔍 Missing dependencies found:${BOLD}$MISSING_DEPS${NC}"
+    printf '%b\n' "${CYAN}🔍 Missing dependencies found:${BOLD}$MISSING_DEPS${NC}"
+    [ "$NEED_OPENSSL" -eq 1 ] && printf '%b\n' "${CYAN}   ℹ️  openssl is needed once, to move your old encrypted credentials (.vault.enc) to credentials.conf.${NC}"
     
     if [ "$OS_TYPE" = "OPENWRT" ] && [ "$FREE_FLASH_KB" -lt "$MIN_FLASH_KB" ]; then
-        echo -e "${RED}❌ ERROR: Insufficient Flash storage to install dependencies!${NC}"
-        echo -e "${YELLOW}Available: $((FREE_FLASH_KB / 1024))MB | Required: 3MB${NC}"
+        printf '%b\n' "${RED}❌ ERROR: Insufficient Flash storage to install dependencies!${NC}"
+        printf '%b\n' "${YELLOW}Available: $((FREE_FLASH_KB / 1024))MB | Required: 3MB${NC}"
         exit 1
     fi
     
     ask_yn "❓ Install missing dependencies?"
     if [ "$ANSWER_YN" = "y" ]; then
-         echo -e "${YELLOW}📥 Installing via $PKG_MANAGER...${NC}"
+         printf '%b\n' "${YELLOW}📥 Installing via $PKG_MANAGER...${NC}"
          
          case "$PKG_MANAGER" in
             opkg)
@@ -321,48 +338,48 @@ if [ -n "$MISSING_DEPS" ]; then
                 zypper install -y $MISSING_DEPS
                 ;;
             *)
-                echo -e "${RED}❌ Auto-install not supported for this OS.${NC}"
-                echo -e "   Please install manually: $MISSING_DEPS"
+                printf '%b\n' "${RED}❌ Auto-install not supported for this OS.${NC}"
+                printf '%b\n' "   Please install manually: $MISSING_DEPS"
                 exit 1
                 ;;
          esac
 
          if [ $? -ne 0 ]; then
-            echo -e "${RED}❌ Error installing dependencies.${NC}"
+            printf '%b\n' "${RED}❌ Error installing dependencies.${NC}"
             [ -f /tmp/nwdta_install_err.log ] && cat /tmp/nwdta_install_err.log
             exit 1
          fi
-         echo -e "${GREEN}✅ Dependencies installed successfully.${NC}"
+         printf '%b\n' "${GREEN}✅ Dependencies installed successfully.${NC}"
     else
-         echo -e "${RED}❌ Cannot proceed without dependencies. Aborting.${NC}"
+         printf '%b\n' "${RED}❌ Cannot proceed without dependencies. Aborting.${NC}"
          exit 1
     fi
 else
-    echo -e "${GREEN}✅ All dependencies are installed.${NC}"
+    printf '%b\n' "${GREEN}✅ All dependencies are installed.${NC}"
     if [ "$OS_TYPE" = "OPENWRT" ]; then
-        echo -e "${GREEN}✅ Flash storage check passed: $((FREE_FLASH_KB / 1024))MB available.${NC}"
+        printf '%b\n' "${GREEN}✅ Flash storage check passed: $((FREE_FLASH_KB / 1024))MB available.${NC}"
     fi
 fi
 
-echo -e "${GREEN}✅ System Ready.${NC}"
-echo -e "${GREEN}✅ Execution Mode Auto-Selected: ${BOLD}${WHITE}$EXEC_MSG${NC}"
+printf '%b\n' "${GREEN}✅ System Ready.${NC}"
+printf '%b\n' "${GREEN}✅ Execution Mode Auto-Selected: ${BOLD}${WHITE}$EXEC_MSG${NC}"
 
 # ==============================================================================
 #  STEP 2: SMART UPGRADE / INSTALL CHECK
 # ==============================================================================
 KEEP_CONFIG=0
 if [ -f "$CONFIG_FILE" ]; then
-    echo -e "\n${YELLOW}⚠️  Existing installation found.${NC}"
-    echo -e "${BOLD}${WHITE}1.${NC} Keep settings (Upgrade)"
-    echo -e "${BOLD}${WHITE}2.${NC} Clean install"
+    printf '%b\n' "\n${YELLOW}⚠️  Existing installation found.${NC}"
+    printf '%b\n' "${BOLD}${WHITE}1.${NC} Keep settings (Upgrade)"
+    printf '%b\n' "${BOLD}${WHITE}2.${NC} Clean install"
     
     ask_opt "Enter choice" "2"
     
     if [ "$ANSWER_OPT" = "1" ]; then
-        echo -e "${CYAN}🔧 Upgrading logic while keeping settings...${NC}"
+        printf '%b\n' "${CYAN}🔧 Upgrading logic while keeping settings...${NC}"
         KEEP_CONFIG=1
     else
-        echo -e "${RED}🧹 Performing clean install...${NC}"
+        printf '%b\n' "${RED}🧹 Performing clean install...${NC}"
         # Universal Stop Logic
         [ "$SERVICE_TYPE" = "PROCD" ] && /etc/init.d/netwatchdta stop >/dev/null 2>&1
         [ "$SERVICE_TYPE" = "SYSTEMD" ] && systemctl stop netwatchdta >/dev/null 2>&1
@@ -372,7 +389,7 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 
-# Function: get_hw_key (ROBUST FIX)
+# Function: get_hw_key  (only used to MIGRATE an old encrypted vault from <=1.5.x)
 get_hw_key() {
     local seed="nwdta_v1_secure_seed_2025"
     if [ -f /proc/cpuinfo ]; then 
@@ -385,22 +402,57 @@ get_hw_key() {
     echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
 }
 
+# Function: get_hw_key_legacy
+# Purpose:  Key used by the OpenWrt 'credentials' command before v1.5.2 (sorted MAC).
+#           Only used to RECOVER a vault written by that bug during migration.
+get_hw_key_legacy() {
+    local seed="nwdta_v1_secure_seed_2025"
+    local cpu_serial=$(grep -i "serial" /proc/cpuinfo 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ')
+    [ -z "$cpu_serial" ] && cpu_serial="unknown_serial"
+    local mac_addr=$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
+    [ -z "$mac_addr" ] && mac_addr="00:00:00:00:00:00"
+    echo -n "${seed}${cpu_serial}${mac_addr}" | openssl dgst -sha256 | awk '{print $2}'
+}
+
+# Function: decrypt_vault <key>
+decrypt_vault() {
+    command -v openssl >/dev/null 2>&1 || return 1
+    # openssl prints partial garbage on a wrong key, so only trust its exit status
+    local out
+    out=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$1" -in "$VAULT_FILE" 2>/dev/null) || return 1
+    printf '%s' "$out" | tr -d '\r'
+}
+
+# Function: conf_get <KEY>   - first word of a setting's value (tolerates indentation/CRLF)
+conf_get() {
+    grep "^[[:space:]]*$1=" "$CONFIG_FILE" 2>/dev/null | head -1 | tr -d '\r' | cut -d'=' -f2- | awk '{print $1}'
+}
+
+# Function: conf_set <KEY> <VALUE>  - replace a setting's value, keep its comment
+conf_set() {
+    if grep -q "^[[:space:]]*$1=" "$CONFIG_FILE"; then
+        sed -i "s/^\([[:space:]]*\)$1=[^[:space:]#]*/\1$1=$2/" "$CONFIG_FILE"
+    fi
+}
+
 # ==============================================================================
 #  STEP 3: CONFIGURATION INPUTS
 # ==============================================================================
 if [ "$KEEP_CONFIG" -eq 0 ]; then
-    echo -e "\n${BLUE}--- Configuration ---${NC}"
+    printf '%b\n' "\n${BLUE}--- Configuration ---${NC}"
     
     # 3a. Router Name
     printf "${BOLD}🏷️  Enter Router/Device Name (e.g., MyRouter): ${NC}"
     read router_name_input </dev/tty
+    router_name_input=$(printf '%s' "$router_name_input" | tr -d '"\\`$')
+    [ -z "$router_name_input" ] && router_name_input="MyRouter"
     
     # 3b. Discord Setup Loop
     DISCORD_ENABLE_VAL="NO"
     DISCORD_WEBHOOK=""
     DISCORD_USERID=""
     
-    echo -e "\n${BLUE}--- Notification Settings ---${NC}"
+    printf '%b\n' "\n${BLUE}--- Notification Settings ---${NC}"
     
     while :; do
         ask_yn "1. Enable Discord Notifications?"
@@ -417,27 +469,27 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         
         ask_yn "   ❓ Send test notification to Discord now?"
         if [ "$ANSWER_YN" = "y" ]; then
-             echo -e "${YELLOW}   🧪 Sending Discord test...${NC}"
+             printf '%b\n' "${YELLOW}   🧪 Sending Discord test...${NC}"
              safe_fetch "$DISCORD_WEBHOOK" "{\"content\": \"<@$DISCORD_USERID>\", \"embeds\": [{\"title\": \"🧪 Setup Test\", \"description\": \"Discord configured successfully for **$router_name_input**.\", \"color\": 1752220}]}" "Content-Type: application/json"
              
-             echo -e "${CYAN}   ℹ️  Signal sent. Please check your Discord channel.${NC}"
+             printf '%b\n' "${CYAN}   ℹ️  Signal sent. Please check your Discord channel.${NC}"
              ask_yn "   ❓ Did you receive the notification?"
              
              if [ "$ANSWER_YN" = "y" ]; then
-                 echo -e "${GREEN}   ✅ Discord configured.${NC}"
+                 printf '%b\n' "${GREEN}   ✅ Discord configured.${NC}"
                  break
              else
-                 echo -e "${RED}   ❌ Test failed.${NC}"
-                 echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
-                 echo -e "${BOLD}${WHITE}   2.${NC} Disable Discord and continue"
-                 echo -e "${BOLD}${WHITE}   3.${NC} Cancel installation"
+                 printf '%b\n' "${RED}   ❌ Test failed.${NC}"
+                 printf '%b\n' "${BOLD}${WHITE}   1.${NC} Input credentials again"
+                 printf '%b\n' "${BOLD}${WHITE}   2.${NC} Disable Discord and continue"
+                 printf '%b\n' "${BOLD}${WHITE}   3.${NC} Cancel installation"
                  ask_opt "   Choice" "3"
                  if [ "$ANSWER_OPT" = "2" ]; then
                      DISCORD_ENABLE_VAL="NO"
                      break
                  fi
                  if [ "$ANSWER_OPT" = "3" ]; then
-                     echo -e "${RED}❌ Installation cancelled by user.${NC}"
+                     printf '%b\n' "${RED}❌ Installation cancelled by user.${NC}"
                      exit 0
                  fi
              fi
@@ -466,27 +518,27 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         
         ask_yn "   ❓ Send test notification to Telegram now?"
         if [ "$ANSWER_YN" = "y" ]; then
-            echo -e "${YELLOW}   🧪 Sending Telegram test...${NC}"
+            printf '%b\n' "${YELLOW}   🧪 Sending Telegram test...${NC}"
             safe_fetch "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"🧪 Setup Test - Telegram configured successfully for $router_name_input.\"}" "Content-Type: application/json"
             
-            echo -e "${CYAN}   ℹ️  Signal sent. Please check your Telegram chat.${NC}"
+            printf '%b\n' "${CYAN}   ℹ️  Signal sent. Please check your Telegram chat.${NC}"
             ask_yn "   ❓ Did you receive the notification?"
             
             if [ "$ANSWER_YN" = "y" ]; then
-                echo -e "${GREEN}   ✅ Telegram configured.${NC}"
+                printf '%b\n' "${GREEN}   ✅ Telegram configured.${NC}"
                 break
             else
-                echo -e "${RED}   ❌ Test failed.${NC}"
-                echo -e "${BOLD}${WHITE}   1.${NC} Input credentials again"
-                echo -e "${BOLD}${WHITE}   2.${NC} Disable Telegram and continue"
-                echo -e "${BOLD}${WHITE}   3.${NC} Cancel installation"
+                printf '%b\n' "${RED}   ❌ Test failed.${NC}"
+                printf '%b\n' "${BOLD}${WHITE}   1.${NC} Input credentials again"
+                printf '%b\n' "${BOLD}${WHITE}   2.${NC} Disable Telegram and continue"
+                printf '%b\n' "${BOLD}${WHITE}   3.${NC} Cancel installation"
                 ask_opt "   Choice" "3"
                 if [ "$ANSWER_OPT" = "2" ]; then
                     TELEGRAM_ENABLE_VAL="NO"
                     break
                 fi
                 if [ "$ANSWER_OPT" = "3" ]; then
-                     echo -e "${RED}❌ Installation cancelled by user.${NC}"
+                     printf '%b\n' "${RED}❌ Installation cancelled by user.${NC}"
                      exit 0
                 fi
             fi
@@ -513,27 +565,27 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
         
         ask_yn "   ❓ Send test notification to ntfy now?"
         if [ "$ANSWER_YN" = "y" ]; then
-            echo -e "${YELLOW}   🧪 Sending ntfy test...${NC}"
+            printf '%b\n' "${YELLOW}   🧪 Sending ntfy test...${NC}"
             safe_fetch "$NTFY_URL" "🧪 Setup Test - ntfy configured successfully for $router_name_input." "Title: Setup Test" "Tags: white_check_mark" "Priority: default"
             
-            echo -e "${CYAN}   ℹ️  Signal sent. Please check your ntfy client.${NC}"
+            printf '%b\n' "${CYAN}   ℹ️  Signal sent. Please check your ntfy client.${NC}"
             ask_yn "   ❓ Did you receive the notification?"
             
             if [ "$ANSWER_YN" = "y" ]; then
-                echo -e "${GREEN}   ✅ ntfy configured.${NC}"
+                printf '%b\n' "${GREEN}   ✅ ntfy configured.${NC}"
                 break
             else
-                echo -e "${RED}   ❌ Test failed.${NC}"
-                echo -e "${BOLD}${WHITE}   1.${NC} Input Topic again"
-                echo -e "${BOLD}${WHITE}   2.${NC} Disable ntfy and continue"
-                echo -e "${BOLD}${WHITE}   3.${NC} Cancel installation"
+                printf '%b\n' "${RED}   ❌ Test failed.${NC}"
+                printf '%b\n' "${BOLD}${WHITE}   1.${NC} Input Topic again"
+                printf '%b\n' "${BOLD}${WHITE}   2.${NC} Disable ntfy and continue"
+                printf '%b\n' "${BOLD}${WHITE}   3.${NC} Cancel installation"
                 ask_opt "   Choice" "3"
                 if [ "$ANSWER_OPT" = "2" ]; then
                     NTFY_ENABLE_VAL="NO"
                     break
                 fi
                 if [ "$ANSWER_OPT" = "3" ]; then
-                     echo -e "${RED}❌ Installation cancelled by user.${NC}"
+                     printf '%b\n' "${RED}❌ Installation cancelled by user.${NC}"
                      exit 0
                 fi
             fi
@@ -547,7 +599,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     user_silent_start="23"
     user_silent_end="07"
     
-    echo -e "\n${BLUE}--- Silent Hours (Mute Alerts) ---${NC}"
+    printf '%b\n' "\n${BLUE}--- Silent Hours (Mute Alerts) ---${NC}"
     ask_yn "🌙 Enable Silent Hours?"
     
     if [ "$ANSWER_YN" = "y" ]; then
@@ -558,7 +610,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             if echo "$user_silent_start" | grep -qE '^[0-9]+$' && [ "$user_silent_start" -ge 0 ] && [ "$user_silent_start" -le 23 ] 2>/dev/null; then
                 break
             else
-                echo -e "${RED}   ❌ Invalid hour. Use 0-23.${NC}"
+                printf '%b\n' "${RED}   ❌ Invalid hour. Use 0-23.${NC}"
             fi
         done
         while :; do
@@ -567,34 +619,35 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             if echo "$user_silent_end" | grep -qE '^[0-9]+$' && [ "$user_silent_end" -ge 0 ] && [ "$user_silent_end" -le 23 ] 2>/dev/null; then
                 break
             else
-                echo -e "${RED}   ❌ Invalid hour. Use 0-23.${NC}"
+                printf '%b\n' "${RED}   ❌ Invalid hour. Use 0-23.${NC}"
             fi
         done
     fi
     
     # 3f. Heartbeat Logic
     HB_VAL="NO"; HB_SEC="86400"; HB_TARGET="ALL"; HB_START_HOUR="12"; HB_START_MIN="00"
-    echo -e "\n${BLUE}--- Heartbeat Settings ---${NC}"
+    printf '%b\n' "\n${BLUE}--- Heartbeat Settings ---${NC}"
     ask_yn "💓 Enable Heartbeat (System check-in)?"
     
     if [ "$ANSWER_YN" = "y" ]; then
         HB_VAL="YES"
-        echo -e "${CYAN}   ℹ️  Interval can be in Hours or Minutes.${NC}"
-        echo -e "   1. ${BOLD}${WHITE}Hours${NC} (e.g., every 12 hours)"
-        echo -e "   2. ${BOLD}${WHITE}Minutes${NC} (e.g., every 30 minutes)"
+        printf '%b\n' "${CYAN}   ℹ️  Interval can be in Hours or Minutes.${NC}"
+        printf '%b\n' "   1. ${BOLD}${WHITE}Hours${NC} (e.g., every 12 hours)"
+        printf '%b\n' "   2. ${BOLD}${WHITE}Minutes${NC} (e.g., every 30 minutes)"
         ask_opt "   Choice" "2"
         
-        if [ "$ANSWER_OPT" = "1" ]; then
-            printf "${BOLD}   > Interval in HOURS: ${NC}"
+        if [ "$ANSWER_OPT" = "1" ]; then HB_UNIT="HOURS"; HB_MULT=3600; else HB_UNIT="MINUTES"; HB_MULT=60; fi
+        while :; do
+            printf "${BOLD}   > Interval in $HB_UNIT: ${NC}"
             read val </dev/tty
-            HB_SEC=$((val * 3600))
-        else
-            printf "${BOLD}   > Interval in MINUTES: ${NC}"
-            read val </dev/tty
-            HB_SEC=$((val * 60))
-        fi
+            if echo "$val" | grep -qE '^[0-9]+$' && [ "$val" -gt 0 ]; then
+                HB_SEC=$((val * HB_MULT))
+                break
+            fi
+            printf '%b\n' "${RED}   ❌ Enter a whole number greater than 0.${NC}"
+        done
 
-        echo -e "${CYAN}   ℹ️  Set Start Time (Alignment Reference)${NC}"
+        printf '%b\n' "${CYAN}   ℹ️  Set Start Time (Alignment Reference)${NC}"
         
         # Ask for Start Hour
         while :; do
@@ -604,7 +657,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             if echo "$HB_START_HOUR" | grep -qE '^[0-9]+$' && [ "$HB_START_HOUR" -ge 0 ] && [ "$HB_START_HOUR" -le 23 ]; then
                 break
             fi
-            echo -e "${RED}   ❌ Invalid hour.${NC}"
+            printf '%b\n' "${RED}   ❌ Invalid hour.${NC}"
         done
         
         # Ask for Start Minute
@@ -615,16 +668,16 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
             if echo "$HB_START_MIN" | grep -qE '^[0-9]+$' && [ "$HB_START_MIN" -ge 0 ] && [ "$HB_START_MIN" -le 59 ]; then
                 break
             fi
-            echo -e "${RED}   ❌ Invalid minute.${NC}"
+            printf '%b\n' "${RED}   ❌ Invalid minute.${NC}"
         done
         
         # --- HEARTBEAT TARGET SELECTOR ---
         if [ "$DISCORD_ENABLE_VAL" = "YES" ] || [ "$TELEGRAM_ENABLE_VAL" = "YES" ] || [ "$NTFY_ENABLE_VAL" = "YES" ]; then
-             echo -e "${BOLD}${WHITE}   Where to send Heartbeat?${NC}"
-             echo -e "   1. ${BOLD}${WHITE}Discord Only${NC}"
-             echo -e "   2. ${BOLD}${WHITE}Telegram Only${NC}"
-             echo -e "   3. ${BOLD}${WHITE}ntfy Only${NC}"
-             echo -e "   4. ${BOLD}${WHITE}All Configured${NC}"
+             printf '%b\n' "${BOLD}${WHITE}   Where to send Heartbeat?${NC}"
+             printf '%b\n' "   1. ${BOLD}${WHITE}Discord Only${NC}"
+             printf '%b\n' "   2. ${BOLD}${WHITE}Telegram Only${NC}"
+             printf '%b\n' "   3. ${BOLD}${WHITE}ntfy Only${NC}"
+             printf '%b\n' "   4. ${BOLD}${WHITE}All Configured${NC}"
              ask_opt "   Choice" "4"
              case "$ANSWER_OPT" in
                  1) HB_TARGET="DISCORD" ;;
@@ -638,42 +691,93 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
     fi
 
     # 3g. Summary Display
-    echo -e "\n${BLUE}--- 📋 Configuration Summary ---${NC}"
-    echo -e " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
-    echo -e " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
-    echo -e " • Telegram       : ${BOLD}${WHITE}$TELEGRAM_ENABLE_VAL${NC}"
-    echo -e " • ntfy           : ${BOLD}${WHITE}$NTFY_ENABLE_VAL${NC}"
-    echo -e " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC}"
-    echo -e "     - Start      : $user_silent_start:00"
-    echo -e "     - End        : $user_silent_end:00"
-    echo -e " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC}"
-    echo -e "     - Interval   : ${BOLD}${WHITE}$HB_SEC${NC} seconds"
-    echo -e "     - Start Time : ${BOLD}${WHITE}$HB_START_HOUR:$HB_START_MIN${NC}"
-    echo -e " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
+    printf '%b\n' "\n${BLUE}--- 📋 Configuration Summary ---${NC}"
+    printf '%b\n' " • Router Name    : ${BOLD}${WHITE}$router_name_input${NC}"
+    printf '%b\n' " • Discord        : ${BOLD}${WHITE}$DISCORD_ENABLE_VAL${NC}"
+    printf '%b\n' " • Telegram       : ${BOLD}${WHITE}$TELEGRAM_ENABLE_VAL${NC}"
+    printf '%b\n' " • ntfy           : ${BOLD}${WHITE}$NTFY_ENABLE_VAL${NC}"
+    printf '%b\n' " • Silent Mode    : ${BOLD}${WHITE}$SILENT_ENABLE_VAL${NC}"
+    printf '%b\n' "     - Start      : $user_silent_start:00"
+    printf '%b\n' "     - End        : $user_silent_end:00"
+    printf '%b\n' " • Heartbeat      : ${BOLD}${WHITE}$HB_VAL${NC}"
+    printf '%b\n' "     - Interval   : ${BOLD}${WHITE}$HB_SEC${NC} seconds"
+    printf '%b\n' "     - Start Time : ${BOLD}${WHITE}$HB_START_HOUR:$HB_START_MIN${NC}"
+    printf '%b\n' " • Execution Mode : ${BOLD}${WHITE}$EXEC_MSG${NC}"
     
-    UPDATE_VAULT=1
+    UPDATE_CREDS=1
 
 else
     # --- SCENARIO B: UPGRADE LOGIC (Check for new providers) ---
-    echo -e "\n${CYAN}🔍 Analyzing existing deployment...${NC}"
+    printf '%b\n' "\n${CYAN}🔍 Analyzing existing deployment...${NC}"
     router_name_input=$(grep "^ROUTER_NAME=" "$CONFIG_FILE" | cut -d'"' -f2)
-    UPDATE_VAULT=0
+    UPDATE_CREDS=0
     
-    # Decode vault to check if ntfy is actually configured
-    HW_KEY=$(get_hw_key)
-    old_vault_data=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -in "$VAULT_FILE" 2>/dev/null | tr -d '\r')
-    
-    has_ntfy=0
-    if [ -n "$old_vault_data" ]; then
-        t3=$(echo "$old_vault_data" | cut -d'|' -f4-)
-        if echo "$t3" | grep -q "|"; then
-            ntfy_val="${t3#*|}"
-            if [ -n "$ntfy_val" ]; then has_ntfy=1; fi
+    # --- Load credentials: plain credentials.conf, or migrate the old encrypted vault ---
+    DISCORD_WEBHOOK=""; DISCORD_USERID=""; TELEGRAM_BOT_TOKEN=""; TELEGRAM_CHAT_ID=""; NTFY_URL=""
+    CRED_STATE="MISSING"
+    if [ -f "$CRED_FILE" ]; then
+        . "$CRED_FILE"
+        CRED_STATE="OK"
+    elif [ -f "$VAULT_FILE" ]; then
+        old_vault_data=$(decrypt_vault "$(get_hw_key 2>/dev/null)") || old_vault_data=$(decrypt_vault "$(get_hw_key_legacy 2>/dev/null)") || old_vault_data=""
+        if [ -n "$old_vault_data" ]; then
+            DISCORD_WEBHOOK=$(echo "$old_vault_data" | cut -d'|' -f1)
+            DISCORD_USERID=$(echo "$old_vault_data" | cut -d'|' -f2)
+            TELEGRAM_BOT_TOKEN=$(echo "$old_vault_data" | cut -d'|' -f3)
+            t3=$(echo "$old_vault_data" | cut -d'|' -f4-)
+            TELEGRAM_CHAT_ID="${t3%%|*}"
+            if echo "$t3" | grep -q "|"; then NTFY_URL="${t3#*|}"; fi
+            CRED_STATE="MIGRATE"
+            UPDATE_CREDS=1
+            printf '%b\n' "${YELLOW}   🔓 Old encrypted vault unlocked - moving credentials to credentials.conf (root-only).${NC}"
+        else
+            CRED_STATE="LOCKED"
         fi
     fi
     
-    if ! grep -q "^NTFY_ENABLE=" "$CONFIG_FILE" || [ "$has_ntfy" -eq 0 ]; then
-        echo -e "\n${BLUE}--- Upgrade: ntfy Configuration Missing ---${NC}"
+    has_ntfy=0
+    [ -n "$NTFY_URL" ] && has_ntfy=1
+    
+    # Existing enable flags
+    DISCORD_ENABLE_VAL=$(conf_get DISCORD_ENABLE)
+    TELEGRAM_ENABLE_VAL=$(conf_get TELEGRAM_ENABLE)
+    CUR_NTFY_ENABLE=$(conf_get NTFY_ENABLE)
+    NTFY_ENABLE_VAL="$CUR_NTFY_ENABLE"
+    
+    if [ "$CRED_STATE" = "LOCKED" ] || [ "$CRED_STATE" = "MISSING" ]; then
+        # --- No usable credentials: offer a full re-entry instead of looping on ntfy ---
+        if [ "$CRED_STATE" = "LOCKED" ]; then
+            printf '%b\n' "\n${RED}❌ The old encrypted vault can't be unlocked on this device.${NC}"
+        else
+            printf '%b\n' "\n${RED}❌ No saved credentials found.${NC}"
+        fi
+        printf '%b\n' "   Notifications cannot be sent until credentials are re-entered."
+        printf '%b\n' "${BOLD}${WHITE}1.${NC} Re-enter all credentials now"
+        printf '%b\n' "${BOLD}${WHITE}2.${NC} Skip (run 'credentials' later)"
+        ask_opt "Enter choice" "2"
+        if [ "$ANSWER_OPT" = "1" ]; then
+            printf "${BOLD}   > Discord Webhook URL (blank = none): ${NC}"; read DISCORD_WEBHOOK </dev/tty
+            DISCORD_USERID=""
+            if [ -n "$DISCORD_WEBHOOK" ]; then printf "${BOLD}   > Discord User ID: ${NC}"; read DISCORD_USERID </dev/tty; fi
+            printf "${BOLD}   > Telegram Bot Token (blank = none): ${NC}"; read TELEGRAM_BOT_TOKEN </dev/tty
+            TELEGRAM_CHAT_ID=""
+            if [ -n "$TELEGRAM_BOT_TOKEN" ]; then printf "${BOLD}   > Telegram Chat ID: ${NC}"; read TELEGRAM_CHAT_ID </dev/tty; fi
+            printf "${BOLD}   > ntfy Topic (blank = none): ${NC}"; read NTFY_TOPIC </dev/tty
+            if [ -n "$NTFY_TOPIC" ]; then NTFY_URL="https://ntfy.sh/$NTFY_TOPIC"; else NTFY_URL=""; fi
+            
+            if [ -n "$DISCORD_WEBHOOK" ]; then DISCORD_ENABLE_VAL="YES"; else DISCORD_ENABLE_VAL="NO"; fi
+            if [ -n "$TELEGRAM_BOT_TOKEN" ]; then TELEGRAM_ENABLE_VAL="YES"; else TELEGRAM_ENABLE_VAL="NO"; fi
+            if [ -n "$NTFY_URL" ]; then NTFY_ENABLE_VAL="YES"; else NTFY_ENABLE_VAL="NO"; fi
+            conf_set DISCORD_ENABLE "$DISCORD_ENABLE_VAL"
+            conf_set TELEGRAM_ENABLE "$TELEGRAM_ENABLE_VAL"
+            conf_set NTFY_ENABLE "$NTFY_ENABLE_VAL"
+            CRED_STATE="NEW"
+            UPDATE_CREDS=1
+        fi
+    
+    elif [ -z "$CUR_NTFY_ENABLE" ] || { [ "$CUR_NTFY_ENABLE" = "YES" ] && [ "$has_ntfy" -eq 0 ]; }; then
+        # --- Vault OK: ask about ntfy only if never configured, or enabled without a topic ---
+        printf '%b\n' "\n${BLUE}--- Upgrade: ntfy Configuration Missing ---${NC}"
         NTFY_ENABLE_VAL="NO"
         NTFY_URL=""
         while :; do
@@ -689,22 +793,23 @@ else
             
             ask_yn "   ❓ Send test notification to ntfy now?"
             if [ "$ANSWER_YN" = "y" ]; then
-                echo -e "${YELLOW}   🧪 Sending ntfy test...${NC}"
+                printf '%b\n' "${YELLOW}   🧪 Sending ntfy test...${NC}"
                 safe_fetch "$NTFY_URL" "🧪 Setup Test - ntfy configured successfully for $router_name_input." "Title: Setup Test" "Tags: white_check_mark" "Priority: default"
                 
-                echo -e "${CYAN}   ℹ️  Signal sent. Please check your ntfy client.${NC}"
+                printf '%b\n' "${CYAN}   ℹ️  Signal sent. Please check your ntfy client.${NC}"
                 ask_yn "   ❓ Did you receive the notification?"
                 
                 if [ "$ANSWER_YN" = "y" ]; then
-                    echo -e "${GREEN}   ✅ ntfy configured.${NC}"
+                    printf '%b\n' "${GREEN}   ✅ ntfy configured.${NC}"
                     break
                 else
-                    echo -e "${RED}   ❌ Test failed.${NC}"
-                    echo -e "${BOLD}${WHITE}   1.${NC} Input Topic again"
-                    echo -e "${BOLD}${WHITE}   2.${NC} Disable ntfy and continue"
+                    printf '%b\n' "${RED}   ❌ Test failed.${NC}"
+                    printf '%b\n' "${BOLD}${WHITE}   1.${NC} Input Topic again"
+                    printf '%b\n' "${BOLD}${WHITE}   2.${NC} Disable ntfy and continue"
                     ask_opt "   Choice" "2"
                     if [ "$ANSWER_OPT" = "2" ]; then
                         NTFY_ENABLE_VAL="NO"
+                        NTFY_URL=""
                         break
                     fi
                 fi
@@ -712,9 +817,8 @@ else
                 break
             fi
         done
-        UPDATE_VAULT=1
-    else
-        NTFY_ENABLE_VAL=$(grep "^NTFY_ENABLE=" "$CONFIG_FILE" | cut -d'=' -f2 | awk '{print $1}')
+        UPDATE_CREDS=1
+        conf_set NTFY_ENABLE "$NTFY_ENABLE_VAL"
     fi
 fi
 
@@ -730,11 +834,11 @@ patch_param() {
     local section="$3"
     
     if ! grep -q "^[[:space:]]*$key=" "$CONFIG_FILE"; then
-        echo -e "${YELLOW}   🔧 Upgrade: Restoring missing parameter '$key' to [$section]...${NC}"
+        printf '%b\n' "${YELLOW}   🔧 Upgrade: Restoring missing parameter '$key' to [$section]...${NC}"
         if grep -q "\[$section\]" "$CONFIG_FILE"; then
             sed "/\[$section\]/a $key=$default_val # Restored by v$SCRIPT_VERSION" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
         else
-            echo -e "\n[$section]" >> "$CONFIG_FILE"
+            printf '%b\n' "\n[$section]" >> "$CONFIG_FILE"
             echo "$key=$default_val # Restored by v$SCRIPT_VERSION" >> "$CONFIG_FILE"
         fi
     fi
@@ -747,7 +851,7 @@ if [ "$KEEP_CONFIG" -eq 0 ]; then
 
     cat <<EOF > "$CONFIG_FILE"
 # settings.conf - Configuration for netwatchdta ($OS_TYPE Edition)
-# Note: Credentials are stored in .vault.enc (Method: OPENSSL)
+# Note: Credentials are stored in credentials.conf (plain text, root-only)
 
 ROUTER_NAME="$router_name_input"
 
@@ -836,7 +940,7 @@ EOF
     cat <<EOF > "$IP_LIST_FILE"
 # Format: IP_ADDRESS / DOMAIN @ NAME
 # Example: 192.168.1.50 @ Home Server
-Example: www.test123.com @ test-server
+# Example: www.test123.com @ test-server
 EOF
 
     # Generate default Remote IP list
@@ -849,7 +953,8 @@ EOF
 
 else
     # --- SCENARIO B: UPGRADE MODE (Full Self-Healing) ---
-    echo -e "${CYAN}♻️  Auditing configuration file for missing parameters...${NC}"
+    printf '%b\n' "${CYAN}♻️  Auditing configuration file for missing parameters...${NC}"
+    sed -i 's/^# Note: Credentials are stored in .vault.enc.*/# Note: Credentials are stored in credentials.conf (plain text, root-only)/' "$CONFIG_FILE"
     
     # 1. Log Settings
     patch_param "UPTIME_LOG_MAX_SIZE" "51200" "Log Settings"
@@ -910,67 +1015,212 @@ else
     # 10. Global Variables (Top of file - special handling)
     if ! grep -q "^EXEC_METHOD=" "$CONFIG_FILE"; then
         sed -i "2i EXEC_METHOD=$AUTO_EXEC_METHOD" "$CONFIG_FILE"
-        echo -e "${YELLOW}   🔧 Restored missing EXEC_METHOD.${NC}"
+        printf '%b\n' "${YELLOW}   🔧 Restored missing EXEC_METHOD.${NC}"
     fi
     if ! grep -q "^SCAN_BATCH_SIZE=" "$CONFIG_FILE"; then
         sed -i "3i SCAN_BATCH_SIZE=$AUTO_BATCH_SIZE" "$CONFIG_FILE"
-        echo -e "${YELLOW}   🔧 Restored missing SCAN_BATCH_SIZE.${NC}"
+        printf '%b\n' "${YELLOW}   🔧 Restored missing SCAN_BATCH_SIZE.${NC}"
     fi
     if ! grep -q "^FETCH_TOOL=" "$CONFIG_FILE"; then
         if [ "$OS_TYPE" = "OPENWRT" ]; then FT="AUTO"; else FT="CURL"; fi
         sed -i "2i FETCH_TOOL=$FT" "$CONFIG_FILE"
-        echo -e "${YELLOW}   🔧 Restored missing FETCH_TOOL.${NC}"
+        printf '%b\n' "${YELLOW}   🔧 Restored missing FETCH_TOOL.${NC}"
     fi
     
-    echo -e "${GREEN}✅ Configuration audit complete. File is compliant with v$SCRIPT_VERSION.${NC}"
+    printf '%b\n' "${GREEN}✅ Configuration audit complete. File is compliant with v$SCRIPT_VERSION.${NC}"
 fi
 
 # ==============================================================================
-#  STEP 5: SECURE CREDENTIAL VAULT (OPENSSL ENFORCED)
+#  STEP 5: SAVE CREDENTIALS (credentials.conf, root-only)
 # ==============================================================================
-echo -e "\n${CYAN}🔐 Securing credentials (OpenSSL AES-256)...${NC}"
+cat <<'EOF' > "$COMMON_LIB"
+# nwdta_common.sh - shared helpers for the netwatchdta service/CLI (generated by installer)
+# Caller sets BASE_DIR before sourcing.
+CONFIG_FILE="$BASE_DIR/settings.conf"
+CRED_FILE="$BASE_DIR/credentials.conf"
 
-if [ "$UPDATE_VAULT" -eq 1 ]; then
-    HW_KEY=$(get_hw_key)
-    
-    if [ "$KEEP_CONFIG" -eq 1 ]; then
-        # UPGRADE MODE: Decrypt old vault, safely reconstruct with ntfy, re-encrypt
-        echo -e "${YELLOW}   ♻️  Upgrading secure vault format...${NC}"
-        old_vault_data=$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -in "$VAULT_FILE" 2>/dev/null | tr -d '\r')
-        if [ -n "$old_vault_data" ]; then
-            d_hook=$(echo "$old_vault_data" | cut -d'|' -f1)
-            d_uid=$(echo "$old_vault_data" | cut -d'|' -f2)
-            t_tok=$(echo "$old_vault_data" | cut -d'|' -f3)
-            t3=$(echo "$old_vault_data" | cut -d'|' -f4-)
-            t_chat="${t3%%|*}"
-            
-            VAULT_DATA="${d_hook}|${d_uid}|${t_tok}|${t_chat}|${NTFY_URL}"
-            
-            if echo -n "$VAULT_DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -out "$VAULT_FILE" 2>/dev/null; then
-                echo -e "${GREEN}✅ Vault upgraded successfully with new credentials.${NC}"
-            else
-                echo -e "${RED}❌ Vault encryption failed during upgrade! Check openssl-util.${NC}"
-            fi
-        else
-            echo -e "${RED}❌ Failed to unlock existing vault. Cannot add new credentials automatically.${NC}"
+nw_load_settings() {
+    [ -f "$CONFIG_FILE" ] && eval "$(sed '/^\[.*\]/d' "$CONFIG_FILE" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
+    return 0
+}
+
+nw_load_creds() {
+    DISCORD_WEBHOOK=""; DISCORD_USERID=""; TELEGRAM_BOT_TOKEN=""; TELEGRAM_CHAT_ID=""; NTFY_URL=""
+    [ -f "$CRED_FILE" ] && . "$CRED_FILE"
+    return 0
+}
+
+# single-quote a value safely for the credentials file
+nw_q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+nw_save_creds() {
+    ( umask 077
+      {
+        echo "# netwatchdta credentials - plain text, readable by root only."
+        echo "# Change with the 'credentials' command, or edit by hand and restart the service."
+        echo "DISCORD_WEBHOOK=$(nw_q "$DISCORD_WEBHOOK")"
+        echo "DISCORD_USERID=$(nw_q "$DISCORD_USERID")"
+        echo "TELEGRAM_BOT_TOKEN=$(nw_q "$TELEGRAM_BOT_TOKEN")"
+        echo "TELEGRAM_CHAT_ID=$(nw_q "$TELEGRAM_CHAT_ID")"
+        echo "NTFY_URL=$(nw_q "$NTFY_URL")"
+      } > "$CRED_FILE.tmp" ) && mv "$CRED_FILE.tmp" "$CRED_FILE" && chmod 600 "$CRED_FILE"
+}
+
+nw_conf_set() {
+    if grep -q "^[[:space:]]*$1=" "$CONFIG_FILE" 2>/dev/null; then
+        sed -i "s/^\([[:space:]]*\)$1=[^[:space:]#]*/\1$1=$2/" "$CONFIG_FILE"
+    fi
+}
+
+# Turn each service on/off in settings.conf to match the saved credentials
+nw_sync_flags() {
+    if [ -n "$DISCORD_WEBHOOK" ]; then nw_conf_set DISCORD_ENABLE YES; else nw_conf_set DISCORD_ENABLE NO; fi
+    if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then nw_conf_set TELEGRAM_ENABLE YES; else nw_conf_set TELEGRAM_ENABLE NO; fi
+    if [ -n "$NTFY_URL" ]; then nw_conf_set NTFY_ENABLE YES; else nw_conf_set NTFY_ENABLE NO; fi
+}
+
+# nw_post URL DATA [HEADER...]  -> 0 on success; sets NW_ERR with the real reason on failure
+nw_post() {
+    _url="$1"; _data="$2"; shift 2
+    NW_ERR=""
+    _resp="/tmp/nwdta_resp.$$"
+    _n=$#
+    if command -v curl >/dev/null 2>&1; then
+        for _h in "$@"; do set -- "$@" -H "$_h"; done
+        shift "$_n"
+        _code=$(curl -s -k -o "$_resp" -w '%{http_code}' -X POST "$@" --data-binary "$_data" "$_url" 2>/dev/null)
+        _rc=$?
+        if [ "$_rc" -eq 0 ]; then
+            case "$_code" in 2??) rm -f "$_resp"; return 0 ;; esac
         fi
+        if [ -z "$_code" ] || [ "$_code" = "000" ]; then
+            NW_ERR="could not connect (curl exit $_rc) - check DNS / internet / URL"
+        else
+            NW_ERR="HTTP $_code - $(head -c 200 "$_resp" 2>/dev/null)"
+        fi
+        rm -f "$_resp"
+        return 1
+    fi
+    if command -v uclient-fetch >/dev/null 2>&1; then
+        if [ "$_n" -gt 0 ] && ! uclient-fetch --help 2>&1 | grep -q -- "--header"; then
+            NW_ERR="uclient-fetch can't send headers and curl is not installed (install curl)"
+            return 1
+        fi
+        for _h in "$@"; do set -- "$@" "--header=$_h"; done
+        shift "$_n"
+        _out=$(uclient-fetch --no-check-certificate -O "$_resp" "$@" --post-data="$_data" "$_url" 2>&1)
+        _rc=$?
+        rm -f "$_resp"
+        [ "$_rc" -eq 0 ] && return 0
+        case "$_out" in *" 204"*|*"204 "*) return 0 ;; esac   # Discord answers 204 No Content
+        NW_ERR="uclient-fetch exit $_rc: $(echo "$_out" | tail -n 2 | tr '\n' ' ')"
+        return 1
+    fi
+    NW_ERR="no HTTP tool found (install curl)"
+    return 1
+}
+
+# nw_test DISCORD|TELEGRAM|NTFY  - real send with a real result
+nw_test() {
+    nw_load_settings
+    nw_load_creds
+    _rc=1
+    case "$1" in
+        DISCORD)
+            [ -z "$DISCORD_WEBHOOK" ] && { echo "No Discord webhook saved (run: credentials)."; return 1; }
+            echo "Sending Discord test..."
+            nw_post "$DISCORD_WEBHOOK" "{\"embeds\": [{\"title\": \"🛠️ Discord Test\", \"description\": \"**Router:** $ROUTER_NAME\\nManual test triggered.\", \"color\": 16776960}]}" "Content-Type: application/json"
+            _rc=$?; _flag="$DISCORD_ENABLE"; _key="DISCORD_ENABLE" ;;
+        TELEGRAM)
+            if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then echo "No Telegram token/chat ID saved (run: credentials)."; return 1; fi
+            echo "Sending Telegram test..."
+            nw_post "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" "{\"chat_id\": \"$TELEGRAM_CHAT_ID\", \"text\": \"🛠️ Telegram Test - $ROUTER_NAME\"}" "Content-Type: application/json"
+            _rc=$?; _flag="$TELEGRAM_ENABLE"; _key="TELEGRAM_ENABLE" ;;
+        NTFY)
+            [ -z "$NTFY_URL" ] && { echo "No ntfy topic saved (run: credentials)."; return 1; }
+            echo "Sending ntfy test to $NTFY_URL ..."
+            nw_post "$NTFY_URL" "Router: $ROUTER_NAME - manual test triggered." "Title: ntfy Test" "Tags: warning" "Priority: high"
+            _rc=$?; _flag="$NTFY_ENABLE"; _key="NTFY_ENABLE" ;;
+    esac
+    if [ "$_rc" -eq 0 ]; then
+        printf '%b\n' "\033[1;32m✅ Accepted by the server - check your app.\033[0m"
     else
-        # CLEAN INSTALL MODE: Full generation
-        VAULT_DATA="${DISCORD_WEBHOOK}|${DISCORD_USERID}|${TELEGRAM_BOT_TOKEN}|${TELEGRAM_CHAT_ID}|${NTFY_URL}"
-        if echo -n "$VAULT_DATA" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "$HW_KEY" -out "$VAULT_FILE" 2>/dev/null; then
-            echo -e "${GREEN}✅ Credentials Encrypted and locked to this hardware.${NC}"
-        else
-            echo -e "${RED}❌ OpenSSL Encryption failed! Check openssl-util.${NC}"
-        fi
+        printf '%b\n' "\033[1;31m❌ Failed: $NW_ERR\033[0m"
+    fi
+    [ "$_flag" != "YES" ] && printf '%b\n' "\033[1;33mℹ️  $_key is not YES in settings.conf, so real alerts won't use this service.\033[0m"
+    return "$_rc"
+}
+
+_nw_state() { [ -n "$1" ] && echo "set" || echo "-"; }
+
+# nw_creds_menu "<restart command>"
+nw_creds_menu() {
+    nw_load_creds
+    echo ""
+    printf '%b\n' "\033[1;33m🔐 Credential Manager\033[0m  ($CRED_FILE)"
+    echo "   Discord: $(_nw_state "$DISCORD_WEBHOOK")   Telegram: $(_nw_state "$TELEGRAM_BOT_TOKEN")   ntfy: ${NTFY_URL:--}"
+    echo "1. Change Discord"
+    echo "2. Change Telegram"
+    echo "3. Change ntfy"
+    echo "4. Change All"
+    echo "5. Cancel"
+    printf "Choice [1-5]: "
+    read c_choice </dev/tty
+    case "$c_choice" in 1|2|3|4) ;; *) echo "Cancelled."; return 0 ;; esac
+    echo "(Leave a field blank to turn that service off.)"
+    if [ "$c_choice" = "1" ] || [ "$c_choice" = "4" ]; then
+        printf "Discord Webhook URL: "; read DISCORD_WEBHOOK </dev/tty
+        DISCORD_USERID=""
+        if [ -n "$DISCORD_WEBHOOK" ]; then printf "Discord User ID (for @mentions, optional): "; read DISCORD_USERID </dev/tty; fi
+    fi
+    if [ "$c_choice" = "2" ] || [ "$c_choice" = "4" ]; then
+        printf "Telegram Bot Token: "; read TELEGRAM_BOT_TOKEN </dev/tty
+        TELEGRAM_CHAT_ID=""
+        if [ -n "$TELEGRAM_BOT_TOKEN" ]; then printf "Telegram Chat ID: "; read TELEGRAM_CHAT_ID </dev/tty; fi
+    fi
+    if [ "$c_choice" = "3" ] || [ "$c_choice" = "4" ]; then
+        printf "ntfy topic (or full URL for a self-hosted server): "; read n_topic </dev/tty
+        case "$n_topic" in
+            "") NTFY_URL="" ;;
+            http://*|https://*) NTFY_URL="$n_topic" ;;
+            *) NTFY_URL="https://ntfy.sh/$n_topic" ;;
+        esac
+    fi
+    if nw_save_creds; then
+        nw_sync_flags
+        printf '%b\n' "\033[1;32m✅ Credentials saved.\033[0m Discord: $(_nw_state "$DISCORD_WEBHOOK")  Telegram: $(_nw_state "$TELEGRAM_BOT_TOKEN")  ntfy: ${NTFY_URL:--}"
+        echo "   (settings.conf on/off switches updated to match)"
+        [ -n "$1" ] && eval "$1"
+    else
+        printf '%b\n' "\033[1;31m❌ Could not write $CRED_FILE\033[0m"
+    fi
+}
+EOF
+chmod 644 "$COMMON_LIB"
+
+printf '%b\n' "\n${CYAN}💾 Saving credentials...${NC}"
+BASE_DIR="$INSTALL_DIR"
+. "$COMMON_LIB"
+
+if [ "$UPDATE_CREDS" -eq 1 ]; then
+    if nw_save_creds; then
+        printf '%b\n' "${GREEN}✅ Credentials saved to $CRED_FILE (readable by root only).${NC}"
+    else
+        printf '%b\n' "${RED}❌ Could not write $CRED_FILE${NC}"
     fi
 else
-    echo -e "${CYAN}   ℹ️  Vault unchanged (No new credentials added).${NC}"
+    printf '%b\n' "${CYAN}   ℹ️  Credentials unchanged.${NC}"
+fi
+# The old encrypted vault is no longer used once credentials.conf exists
+if [ -f "$CRED_FILE" ] && [ -f "$VAULT_FILE" ]; then
+    rm -f "$VAULT_FILE"
+    printf '%b\n' "${CYAN}   🧹 Removed old encrypted vault (.vault.enc).${NC}"
 fi
 
 # ==============================================================================
 #  STEP 6: GENERATE CORE SCRIPT (THE ENGINE)
 # ==============================================================================
-echo -e "\n${CYAN}🛠️  Generating core script ($OS_TYPE Mode)...${NC}"
+printf '%b\n' "\n${CYAN}🛠️  Generating core script ($OS_TYPE Mode)...${NC}"
 
 cat <<EOF > "$INSTALL_DIR/netwatchdta.sh"
 #!/bin/sh
@@ -984,7 +1234,7 @@ BASE_DIR="$INSTALL_DIR"
 IP_LIST_FILE="\$BASE_DIR/device_ips.conf"
 REMOTE_LIST_FILE="\$BASE_DIR/remote_ips.conf"
 CONFIG_FILE="\$BASE_DIR/settings.conf"
-VAULT_FILE="\$BASE_DIR/.vault.enc"
+CRED_FILE="\$BASE_DIR/credentials.conf"
 
 # Flash Paths
 SILENT_BUFFER="\$BASE_DIR/nwdta_silent_buffer"
@@ -1001,6 +1251,10 @@ mkdir -p "\$TMP_DIR"
 if [ ! -f "\$SILENT_BUFFER" ]; then touch "\$SILENT_BUFFER"; fi
 if [ ! -f "\$LOGFILE" ]; then touch "\$LOGFILE"; fi
 if [ ! -f "\$NET_STATUS_FILE" ]; then echo "UP" > "\$NET_STATUS_FILE"; fi
+
+# uclient-fetch is only usable if it supports custom headers (needed for JSON / ntfy)
+UCLIENT_HDR=0
+if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q -- "--header"; then UCLIENT_HDR=1; fi
 
 # Tracking Variables
 LAST_EXT_CHECK=0
@@ -1040,42 +1294,12 @@ load_config() {
     fi
 }
 
-# --- HELPER: HW KEY GENERATION (ROBUST) ---
-get_hw_key() {
-    local seed="nwdta_v1_secure_seed_2025"
-    if [ -f /proc/cpuinfo ]; then 
-        local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
-        [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
-    else 
-        cpu_serial="generic_linux_machine"
-    fi
-    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00" | head -1)
-    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
-}
-
-# --- HELPER: CREDENTIAL DECRYPTION ---
+# --- HELPER: LOAD CREDENTIALS (plain file, root-only) ---
 load_credentials() {
-    if [ -f "\$VAULT_FILE" ]; then
-        local key=\$(get_hw_key)
-        local decrypted=\$(openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$VAULT_FILE" 2>/dev/null)
-        if [ -n "\$decrypted" ]; then
-            decrypted=\$(echo "\$decrypted" | tr -d '\r')
-            export DISCORD_WEBHOOK="\${decrypted%%|*}"
-            local temp1="\${decrypted#*|}"
-            export DISCORD_USERID="\${temp1%%|*}"
-            local temp2="\${temp1#*|}"
-            export TELEGRAM_BOT_TOKEN="\${temp2%%|*}"
-            local temp3="\${temp2#*|}"
-            export TELEGRAM_CHAT_ID="\${temp3%%|*}"
-            
-            # ntfy support check (backwards compatibility for missing pipe)
-            if echo "\$temp3" | grep -q "|"; then
-                export NTFY_URL="\${temp3#*|}"
-            else
-                export NTFY_URL=""
-            fi
-            return 0
-        fi
+    DISCORD_WEBHOOK=""; DISCORD_USERID=""; TELEGRAM_BOT_TOKEN=""; TELEGRAM_CHAT_ID=""; NTFY_URL=""
+    if [ -f "\$CRED_FILE" ]; then
+        . "\$CRED_FILE"
+        return 0
     fi
     return 1
 }
@@ -1105,7 +1329,7 @@ safe_fetch() {
         return 0
     fi
     
-    if [ "\$FETCH_TOOL" = "UCLIENT" ] && (command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ]); then
+    if [ "\$FETCH_TOOL" = "UCLIENT" ] && [ "\$UCLIENT_HDR" = "1" ]; then
         if [ -n "\$h3" ]; then
             uclient-fetch --no-check-certificate -qO- --header="\$h1" --header="\$h2" --header="\$h3" --post-data="\$data" "\$url" >/dev/null 2>&1
         elif [ -n "\$h2" ]; then
@@ -1133,8 +1357,8 @@ safe_fetch() {
 
     # --- 2. AUTO PRIORITY (OS Aware) ---
     if [ "$OS_TYPE" = "OPENWRT" ]; then
-        # Priority A: uclient-fetch (Lightweight)
-        if command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ]; then
+        # Priority A: uclient-fetch (Lightweight) - only if it supports --header
+        if [ "\$UCLIENT_HDR" = "1" ]; then
             if [ -n "\$h3" ]; then
                 uclient-fetch --no-check-certificate -qO- --header="\$h1" --header="\$h2" --header="\$h3" --post-data="\$data" "\$url" >/dev/null 2>&1
             elif [ -n "\$h2" ]; then
@@ -1192,19 +1416,20 @@ send_payload() {
     # 1. DISCORD
     if [ "\$DISCORD_ENABLE" = "YES" ] && [ -n "\$DISCORD_WEBHOOK" ]; then
         if [ -z "\$filter" ] || [ "\$filter" = "ALL" ] || [ "\$filter" = "BOTH" ] || [ "\$filter" = "DISCORD" ]; then
-             local json_desc=\$(echo "\$desc" | awk '{printf "%s\\\\n", \$0}' | sed 's/\\\\n$//')
+             local json_desc=\$(echo "\$desc" | sed 's/"/\\\\"/g' | awk '{printf "%s\\\\n", \$0}' | sed 's/\\\\n$//')
+             local json_title=\$(echo "\$title" | sed 's/"/\\\\"/g')
              local d_payload
              if [ "\$do_mention" = "YES" ] && [ -n "\$DISCORD_USERID" ]; then
-                d_payload="{\"content\": \"<@\$DISCORD_USERID>\", \"embeds\": [{\"title\": \"\$title\", \"description\": \"\$json_desc\", \"color\": \$color}]}"
+                d_payload="{\"content\": \"<@\$DISCORD_USERID>\", \"embeds\": [{\"title\": \"\$json_title\", \"description\": \"\$json_desc\", \"color\": \$color}]}"
              else
-                d_payload="{\"embeds\": [{\"title\": \"\$title\", \"description\": \"\$json_desc\", \"color\": \$color}]}"
+                d_payload="{\"embeds\": [{\"title\": \"\$json_title\", \"description\": \"\$json_desc\", \"color\": \$color}]}"
              fi
              
              if safe_fetch "\$DISCORD_WEBHOOK" "\$d_payload" "Content-Type: application/json"; then 
                  success=1
              else 
                  # Explicit Error Suppression for uclient-fetch (Double Safety)
-                 if [ "$OS_TYPE" = "OPENWRT" ] && (command -v uclient-fetch >/dev/null 2>&1 || [ -x /bin/uclient-fetch ]) && [ "\$FETCH_TOOL" != "CURL" ]; then 
+                 if [ "$OS_TYPE" = "OPENWRT" ] && [ "\$UCLIENT_HDR" = "1" ] && [ "\$FETCH_TOOL" != "CURL" ]; then 
                      success=1
                  else
                      log_msg "[ERROR] Discord send failed." "UPTIME" "\$NOW_HUMAN"
@@ -1295,12 +1520,14 @@ send_notification() {
     fi
     
     # --- SEQUENTIAL LOCK (Method 2 Only) ---
+    local got_lock=0
     if [ "$EXEC_METHOD" -eq 2 ]; then
         local w_count=0
-        while ! mkdir "/tmp/nwdta.lock" 2>/dev/null; do
+        while :; do
+            if mkdir "/tmp/nwdta.lock" 2>/dev/null; then got_lock=1; break; fi
             sleep 1
             w_count=$((w_count + 1))
-            if [ "$w_count" -ge 20 ]; then break; fi # Prevent infinite hang
+            if [ "$w_count" -ge 20 ]; then break; fi # Prevent infinite hang (send without lock)
         done
     fi
 
@@ -1316,7 +1543,7 @@ send_notification() {
     fi
     
     # --- RELEASE LOCK (Method 2 Only) ---
-    if [ "$EXEC_METHOD" -eq 2 ]; then
+    if [ "$got_lock" -eq 1 ]; then
         rmdir "/tmp/nwdta.lock" 2>/dev/null
     fi
 }
@@ -1325,7 +1552,15 @@ send_notification() {
 flush_buffer() {
     if [ -f "$OFFLINE_BUFFER" ]; then
         log_msg "[SYSTEM] Internet Restored. Flushing buffer..." "UPTIME" "$NOW_HUMAN"
-        while IFS="|||" read -r b_title b_desc_raw b_color b_filter b_tel_raw b_mention; do
+        local b_line b_rest b_title b_desc_raw b_color b_filter b_tel_raw b_mention
+        while IFS= read -r b_line || [ -n "$b_line" ]; do
+             [ -z "$b_line" ] && continue
+             b_title="${b_line%%|||*}";  b_rest="${b_line#*|||}"
+             b_desc_raw="${b_rest%%|||*}"; b_rest="${b_rest#*|||}"
+             b_color="${b_rest%%|||*}";  b_rest="${b_rest#*|||}"
+             b_filter="${b_rest%%|||*}"; b_rest="${b_rest#*|||}"
+             b_tel_raw="${b_rest%%|||*}"; b_rest="${b_rest#*|||}"
+             b_mention="$b_rest"
              local b_desc=$(echo "$b_desc_raw" | sed 's/__BR__/\\n/g')
              local b_tel=$(echo "$b_tel_raw" | sed 's/__BR__/\n/g')
              sleep 1 
@@ -1463,7 +1698,7 @@ load_credentials
 if [ $? -eq 0 ]; then
     log_msg "[SYSTEM] Credentials loaded." "UPTIME" "$(date '+%b %d %H:%M:%S')"
 else
-    log_msg "[WARNING] Vault error or missing." "UPTIME" "$(date '+%b %d %H:%M:%S')"
+    log_msg "[WARNING] credentials.conf missing - run the 'credentials' command." "UPTIME" "$(date '+%b %d %H:%M:%S')"
 fi
 
 # Initialize Heartbeat Alignment
@@ -1508,7 +1743,7 @@ while true; do
                  align_heartbeat 
             fi
             
-            local M_HB="NO"
+            M_HB="NO"
             if [ "$DISCORD_MENTION_HB" = "YES" ] || [ "$NTFY_MENTION_HB" = "YES" ]; then M_HB="YES"; fi
             
             send_notification "💓 Heartbeat Report" "**Router:** $ROUTER_NAME\n**Status:** Operational\n**Time:** $NOW_HUMAN" "1752220" "INFO" "${HB_TARGET:-ALL}" "NO" "💓 Heartbeat - $ROUTER_NAME - $NOW_HUMAN" "$M_HB"
@@ -1531,6 +1766,11 @@ while true; do
         send_notification "🌙 Silent Hours Summary" "**Router:** $ROUTER_NAME\n$CLEAN_S" "10181046" "SUMMARY" "ALL" "NO" "🌙 Silent Hours Summary - $ROUTER_NAME\n$S_CONTENT" "NO"
         > "$SILENT_BUFFER"
         log_msg "[SYSTEM] Silent buffer dumped." "UPTIME" "$NOW_HUMAN"
+    fi
+    if [ "$IS_SILENT" -eq 0 ] && [ -s "$OFFLINE_BUFFER" ]; then
+        NET_NOW="UP"
+        [ -f "$NET_STATUS_FILE" ] && read NET_NOW < "$NET_STATUS_FILE"
+        [ "$NET_NOW" = "UP" ] && flush_buffer
     fi
 
     # 3. INTERNET MONITOR
@@ -1576,7 +1816,7 @@ while true; do
                     MSG_T="🟢 Connectivity Restored * $ROUTER_NAME - Down time: $START_TIME - UP time: $NOW_HUMAN - Duration: $DR"
                     log_msg "[SUCCESS] INTERNET UP - Downtime: $DR" "UPTIME" "$NOW_HUMAN"
                     
-                    local M_NET="NO"
+                    M_NET="NO"
                     if [ "$DISCORD_MENTION_NET" = "YES" ] || [ "$NTFY_MENTION_NET" = "YES" ]; then M_NET="YES"; fi
                     
                     if [ "$IS_SILENT" -eq 0 ]; then
@@ -1711,7 +1951,7 @@ chmod +x "$INSTALL_DIR/netwatchdta.sh"
 ## ==============================================================================
 #  STEP 7: SERVICE CONFIGURATION (MULTI-OS)
 # ==============================================================================
-echo -e "\n${CYAN}⚙️  Configuring system service ($SERVICE_TYPE)...${NC}"
+printf '%b\n' "\n${CYAN}⚙️  Configuring system service ($SERVICE_TYPE)...${NC}"
 
 if [ "$SERVICE_TYPE" = "PROCD" ]; then
     # --- OPENWRT PROCD SERVICE (Interactive Edit Added) ---
@@ -1743,16 +1983,16 @@ start_service() {
 check() {
     local v=\$(grep "^VERSION=" "$INSTALL_DIR/netwatchdta.sh" | cut -d'"' -f2)
     if pgrep -f "netwatchdta.sh" > /dev/null; then
-        echo -e "\033[1;32m● netwatchdta is RUNNING.\033[0m (v\$v)"
+        printf '%b\n' "\033[1;32m● netwatchdta is RUNNING.\033[0m (v\$v)"
         echo "   PID: \$(pgrep -f "netwatchdta.sh" | head -1)"
     else
-        echo -e "\033[1;31m● netwatchdta is STOPPED.\033[0m (v\$v)"
+        printf '%b\n' "\033[1;31m● netwatchdta is STOPPED.\033[0m (v\$v)"
     fi
 }
 
 logs() {
     if [ -f "/tmp/netwatchdta/nwdta_uptime.log" ]; then
-        echo -e "\033[1;34m--- Recent Activity ---\033[0m"
+        printf '%b\n' "\033[1;34m--- Recent Activity ---\033[0m"
         tail -n 20 /tmp/netwatchdta/nwdta_uptime.log
     else
         echo "No log found."
@@ -1766,7 +2006,7 @@ clear() {
 
 edit() {
     echo ""
-    echo -e "\033[1;36m📝 Configuration Editor\033[0m"
+    printf '%b\n' "\033[1;36m📝 Configuration Editor\033[0m"
     
     local editor="vi"
     if command -v nano >/dev/null 2>&1; then editor="nano"; fi
@@ -1775,210 +2015,84 @@ edit() {
         echo "1. Edit Settings (settings.conf)"
         echo "2. Edit Device IPs (device_ips.conf)"
         echo "3. Edit Remote IPs (remote_ips.conf)"
-        echo "4. Exit"
-        printf "\033[1mChoice [1-4]: \033[0m"
+        echo "4. Edit Credentials (credentials.conf)"
+        echo "5. Exit"
+        printf "\033[1mChoice [1-5]: \033[0m"
         read choice </dev/tty
         case "\$choice" in
             1) \$editor "$INSTALL_DIR/settings.conf"; break ;;
             2) \$editor "$INSTALL_DIR/device_ips.conf"; break ;;
             3) \$editor "$INSTALL_DIR/remote_ips.conf"; break ;;
-            4) echo "Cancelled."; exit 0 ;;
+            4) \$editor "$INSTALL_DIR/credentials.conf"; break ;;
+            5) echo "Cancelled."; exit 0 ;;
             *) echo "Invalid choice." ;;
         esac
     done
     echo ""
-    echo -e "\033[1;33m⚠️  If you made changes, run: /etc/init.d/netwatchdta restart\033[0m"
+    printf '%b\n' "\033[1;33m⚠️  If you made changes, run: /etc/init.d/netwatchdta restart\033[0m"
 }
 
 purge() {
     echo ""
-    echo -e "\033[1;31m=======================================================\033[0m"
-    echo -e "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
-    echo -e "\033[1;31m=======================================================\033[0m"
+    printf '%b\n' "\033[1;31m=======================================================\033[0m"
+    printf '%b\n' "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
+    printf '%b\n' "\033[1;31m=======================================================\033[0m"
     echo ""
-    echo -e "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
-    echo -e "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
-    echo -e "\033[1;37m3.\033[0m Cancel"
+    printf '%b\n' "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
+    printf '%b\n' "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
+    printf '%b\n' "\033[1;37m3.\033[0m Cancel"
     printf "\033[1mChoice [1-3]: \033[0m"
     read choice </dev/tty
     
     case "\$choice" in
         1)
             echo ""
-            echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+            printf '%b\n' "\033[1;33m🛑 Stopping service...\033[0m"
             /etc/init.d/netwatchdta stop
             /etc/init.d/netwatchdta disable
-            echo -e "\033[1;33m🧹 Cleaning up /tmp and buffers...\033[0m"
+            printf '%b\n' "\033[1;33m🧹 Cleaning up /tmp and buffers...\033[0m"
             rm -rf "/tmp/netwatchdta"
             rm -rf "$INSTALL_DIR"
-            echo -e "\033[1;33m🔥 Self-destructing service file...\033[0m"
+            printf '%b\n' "\033[1;33m🔥 Self-destructing service file...\033[0m"
             rm -f "$SERVICE_PATH"
             echo ""
-            echo -e "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
+            printf '%b\n' "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
             ;;
         2)
             echo ""
-            echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+            printf '%b\n' "\033[1;33m🛑 Stopping service...\033[0m"
             /etc/init.d/netwatchdta stop
             /etc/init.d/netwatchdta disable
-            echo -e "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
+            printf '%b\n' "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
             rm -rf "/tmp/netwatchdta"
-            echo -e "\033[1;33m🗑️  Removing core script...\033[0m"
-            rm -f "$INSTALL_DIR/netwatchdta.sh"
-            echo -e "\033[1;33m🔥 Removing service file...\033[0m"
+            printf '%b\n' "\033[1;33m🗑️  Removing core script...\033[0m"
+            rm -f "$INSTALL_DIR/netwatchdta.sh" "$INSTALL_DIR/nwdta_common.sh"
+            printf '%b\n' "\033[1;33m🔥 Removing service file...\033[0m"
             rm -f "$SERVICE_PATH"
             echo ""
-            echo -e "\033[1;33m✅ Logic removed. Settings preserved in $INSTALL_DIR\033[0m"
+            printf '%b\n' "\033[1;33m✅ Logic removed. Settings preserved in $INSTALL_DIR\033[0m"
             ;;
         *)
-            echo -e "\033[1;31m❌ Purge cancelled.\033[0m"
+            printf '%b\n' "\033[1;31m❌ Purge cancelled.\033[0m"
             exit 0
             ;;
     esac
 }
 
 load_functions() {
-    if [ -f "$INSTALL_DIR/netwatchdta.sh" ]; then
-        eval "\$(sed '/^\[.*\]/d' "$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
-    fi
+    BASE_DIR="$INSTALL_DIR"
+    . "$INSTALL_DIR/nwdta_common.sh"
+    nw_load_settings
 }
 
-get_hw_key() {
-    local seed="nwdta_v1_secure_seed_2025"
-    local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
-    [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
-    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00:00:00:00:00" | sort | head -1)
-    [ -z "\$mac_addr" ] && mac_addr="00:00:00:00:00:00"
-    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
-}
-
-get_decrypted_creds() {
-    local vault="$INSTALL_DIR/.vault.enc"
-    if [ ! -f "\$vault" ]; then return 1; fi
-    local key=\$(get_hw_key)
-    openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$vault" 2>/dev/null
-}
-
-discord() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
-    
-    if [ -n "\$webhook" ]; then
-        echo "Sending Discord test..."
-        if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-            uclient-fetch --no-check-certificate -qO- --header="Content-Type: application/json" --post-data="{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
-        else
-            curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
-        fi
-        echo "Sent."
-    else
-        echo "No Discord Webhook configured or vault locked."
-    fi
-}
-
-telegram() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local token=\$(echo "\$decrypted" | cut -d'|' -f3)
-    local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
-    
-    if [ -n "\$token" ]; then
-        echo "Sending Telegram test..."
-        if command -v uclient-fetch >/dev/null 2>&1; then
-             uclient-fetch --no-check-certificate -qO- --post-data="chat_id=\$chat&text=🛠️ Telegram Warning Test - \$ROUTER_NAME" "https://api.telegram.org/bot\$token/sendMessage" >/dev/null 2>&1
-        else
-             curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
-        fi
-        echo "Sent."
-    else
-        echo "No Telegram Token configured or vault locked."
-    fi
-}
-
-ntfy() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local t3=\$(echo "\$decrypted" | cut -d'|' -f4-)
-    local url=""
-    if echo "\$t3" | grep -q "|"; then url="\${t3#*|}"; fi
-    
-    if [ -n "\$url" ]; then
-        echo "Sending ntfy test..."
-        if command -v uclient-fetch >/dev/null 2>&1 && uclient-fetch --help 2>&1 | grep -q "\-\-header"; then
-             uclient-fetch --no-check-certificate -qO- --header="Title: ntfy Warning Test" --header="Tags: warning" --header="Priority: high" --post-data="**Router:** \$ROUTER_NAME\nManual warning triggered." "\$url" >/dev/null 2>&1
-        else
-             curl -s -k -X POST -H "Title: ntfy Warning Test" -H "Tags: warning" -H "Priority: high" -d "**Router:** \$ROUTER_NAME\nManual warning triggered." "\$url" >/dev/null 2>&1
-        fi
-        echo "Sent."
-    else
-        echo "No ntfy URL configured or vault locked."
-    fi
-}
-
-credentials() {
-    echo ""
-    echo -e "\033[1;33m🔐 Credential Manager\033[0m"
-    echo "1. Change Discord Credentials"
-    echo "2. Change Telegram Credentials"
-    echo "3. Change ntfy Topic"
-    echo "4. Change All"
-    printf "Choice [1-4]: "
-    read c_choice </dev/tty
-    
-    load_functions
-    local current=\$(get_decrypted_creds)
-    current=\$(echo "\$current" | tr -d '\r')
-    
-    local d_hook=\$(echo "\$current" | cut -d'|' -f1)
-    local d_uid=\$(echo "\$current" | cut -d'|' -f2)
-    local t_tok=\$(echo "\$current" | cut -d'|' -f3)
-    
-    local t3=\$(echo "\$current" | cut -d'|' -f4-)
-    local t_chat="\${t3%%|*}"
-    local n_url=""
-    if echo "\$t3" | grep -q "|"; then n_url="\${t3#*|}"; fi
-
-    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New Discord Webhook: "
-        read d_hook </dev/tty
-        printf "New Discord User ID: "
-        read d_uid </dev/tty
-    fi
-    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New Telegram Token: "
-        read t_tok </dev/tty
-        printf "New Telegram Chat ID: "
-        read t_chat </dev/tty
-    fi
-    if [ "\$c_choice" = "3" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New ntfy Topic (e.g., my_topic, leave blank to skip): "
-        read n_topic </dev/tty
-        if [ -n "\$n_topic" ]; then
-            n_url="https://ntfy.sh/\$n_topic"
-        else
-            n_url=""
-        fi
-    fi
-    
-    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}|\${n_url}"
-    local vault="$INSTALL_DIR/.vault.enc"
-    local key=\$(get_hw_key)
-    
-    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then 
-        echo -e "\033[1;32m✅ Credentials updated.\033[0m"
-        /etc/init.d/netwatchdta restart 
-    else 
-        echo -e "\033[1;31m❌ Encryption failed.\033[0m"
-    fi
-}
+discord()     { load_functions; nw_test DISCORD; }
+telegram()    { load_functions; nw_test TELEGRAM; }
+ntfy()        { load_functions; nw_test NTFY; }
+credentials() { load_functions; nw_creds_menu "/etc/init.d/netwatchdta restart"; }
 EOF
     chmod +x "$SERVICE_PATH"
     "$SERVICE_PATH" enable >/dev/null 2>&1
-    "$SERVICE_PATH" start >/dev/null 2>&1
+    "$SERVICE_PATH" restart >/dev/null 2>&1
 
 elif [ "$SERVICE_TYPE" = "SYSTEMD" ]; then
     # --- LINUX SYSTEMD SERVICE ---
@@ -1998,7 +2112,7 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable netwatchdta >/dev/null 2>&1
-    systemctl start netwatchdta
+    systemctl restart netwatchdta
 
     # --- LINUX CLI WRAPPER (Updated with Functions for Local Fix) ---
     CLI_PATH="/usr/local/bin/netwatchdta"
@@ -2009,135 +2123,13 @@ INSTALL_DIR="$INSTALL_DIR"
 CONF="\$INSTALL_DIR/settings.conf"
 
 # --- HELPER FUNCTIONS FOR LINUX CLI ---
-load_functions() {
-    if [ -f "\$INSTALL_DIR/netwatchdta.sh" ]; then
-        eval "\$(sed '/^\[.*\]/d' "\$INSTALL_DIR/settings.conf" | sed 's/[ \t]*#.*//' | sed 's/[ \t]*$//' | tr -d '\r')"
-    fi
-}
+BASE_DIR="\$INSTALL_DIR"
+[ -f "\$INSTALL_DIR/nwdta_common.sh" ] && . "\$INSTALL_DIR/nwdta_common.sh"
 
-get_hw_key() {
-    local seed="nwdta_v1_secure_seed_2025"
-    if [ -f /proc/cpuinfo ]; then 
-        local cpu_serial=\$(grep -i "serial" /proc/cpuinfo | head -1 | awk -F: '{print \$2}' | tr -d ' ')
-        [ -z "\$cpu_serial" ] && cpu_serial="unknown_serial"
-    else 
-        cpu_serial="generic_linux_machine"
-    fi
-    local mac_addr=\$(cat /sys/class/net/*/address 2>/dev/null | grep -v "00:00" | head -1)
-    echo -n "\${seed}\${cpu_serial}\${mac_addr}" | openssl dgst -sha256 | awk '{print \$2}'
-}
-
-get_decrypted_creds() {
-    local vault="\$INSTALL_DIR/.vault.enc"
-    if [ ! -f "\$vault" ]; then return 1; fi
-    local key=\$(get_hw_key)
-    openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -iter 10000 -k "\$key" -in "\$vault" 2>/dev/null
-}
-
-run_discord_test() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local webhook=\$(echo "\$decrypted" | cut -d'|' -f1)
-    
-    if [ -n "\$webhook" ]; then
-        echo "Sending Discord test..."
-        curl -s -k -H "Content-Type: application/json" -X POST -d "{\"embeds\": [{\"title\": \"🛠️ Discord Warning Test\", \"description\": \"**Router:** \$ROUTER_NAME\nManual warning triggered.\", \"color\": 16776960}]}" "\$webhook" >/dev/null 2>&1
-        echo "Sent."
-    else
-        echo "No Discord Webhook configured or vault locked."
-    fi
-}
-
-run_telegram_test() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local token=\$(echo "\$decrypted" | cut -d'|' -f3)
-    local chat=\$(echo "\$decrypted" | cut -d'|' -f4)
-    
-    if [ -n "\$token" ]; then
-        echo "Sending Telegram test..."
-        curl -s -k -X POST "https://api.telegram.org/bot\$token/sendMessage" -d chat_id="\$chat" -d text="🛠️ Telegram Warning Test - \$ROUTER_NAME" >/dev/null 2>&1
-        echo "Sent."
-    else
-        echo "No Telegram Token configured or vault locked."
-    fi
-}
-
-run_ntfy_test() {
-    load_functions
-    local decrypted=\$(get_decrypted_creds)
-    decrypted=\$(echo "\$decrypted" | tr -d '\r')
-    local t3=\$(echo "\$decrypted" | cut -d'|' -f4-)
-    local url=""
-    if echo "\$t3" | grep -q "|"; then url="\${t3#*|}"; fi
-    
-    if [ -n "\$url" ]; then
-        echo "Sending ntfy test..."
-        curl -s -k -X POST -H "Title: ntfy Warning Test" -H "Tags: warning" -H "Priority: high" -d "**Router:** \$ROUTER_NAME\nManual warning triggered." "\$url" >/dev/null 2>&1
-        echo "Sent."
-    else
-        echo "No ntfy URL configured or vault locked."
-    fi
-}
-
-run_credentials_update() {
-    echo ""
-    echo -e "\033[1;33m🔐 Credential Manager\033[0m"
-    echo "1. Change Discord Credentials"
-    echo "2. Change Telegram Credentials"
-    echo "3. Change ntfy Topic"
-    echo "4. Change All"
-    printf "Choice [1-4]: "
-    read c_choice </dev/tty
-    
-    load_functions
-    local current=\$(get_decrypted_creds)
-    current=\$(echo "\$current" | tr -d '\r')
-    
-    local d_hook=\$(echo "\$current" | cut -d'|' -f1)
-    local d_uid=\$(echo "\$current" | cut -d'|' -f2)
-    local t_tok=\$(echo "\$current" | cut -d'|' -f3)
-    
-    local t3=\$(echo "\$current" | cut -d'|' -f4-)
-    local t_chat="\${t3%%|*}"
-    local n_url=""
-    if echo "\$t3" | grep -q "|"; then n_url="\${t3#*|}"; fi
-
-    if [ "\$c_choice" = "1" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New Discord Webhook: "
-        read d_hook </dev/tty
-        printf "New Discord User ID: "
-        read d_uid </dev/tty
-    fi
-    if [ "\$c_choice" = "2" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New Telegram Token: "
-        read t_tok </dev/tty
-        printf "New Telegram Chat ID: "
-        read t_chat </dev/tty
-    fi
-    if [ "\$c_choice" = "3" ] || [ "\$c_choice" = "4" ]; then 
-        printf "New ntfy Topic (e.g., my_topic, leave blank to skip): "
-        read n_topic </dev/tty
-        if [ -n "\$n_topic" ]; then
-            n_url="https://ntfy.sh/\$n_topic"
-        else
-            n_url=""
-        fi
-    fi
-    
-    local new_data="\${d_hook}|\${d_uid}|\${t_tok}|\${t_chat}|\${n_url}"
-    local vault="\$INSTALL_DIR/.vault.enc"
-    local key=\$(get_hw_key)
-    
-    if echo -n "\$new_data" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -iter 10000 -k "\$key" -out "\$vault" 2>/dev/null; then 
-        echo -e "\033[1;32m✅ Credentials updated.\033[0m"
-        systemctl restart netwatchdta 
-    else 
-        echo -e "\033[1;31m❌ Encryption failed.\033[0m"
-    fi
-}
+run_discord_test()       { nw_test DISCORD; }
+run_telegram_test()      { nw_test TELEGRAM; }
+run_ntfy_test()          { nw_test NTFY; }
+run_credentials_update() { nw_creds_menu "systemctl restart netwatchdta"; }
 
 case "\$1" in
     start) 
@@ -2153,11 +2145,11 @@ case "\$1" in
         echo "Restarted." 
         ;;
     status|check) 
-        local v=\$(grep "^VERSION=" "$INSTALL_DIR/netwatchdta.sh" | cut -d'"' -f2)
+        v=\$(grep "^VERSION=" "$INSTALL_DIR/netwatchdta.sh" | cut -d'"' -f2)
         if systemctl is-active --quiet netwatchdta; then
-            echo -e "\033[1;32m● netwatchdta is RUNNING.\033[0m (v\$v)"
+            printf '%b\n' "\033[1;32m● netwatchdta is RUNNING.\033[0m (v\$v)"
         else
-            echo -e "\033[1;31m● netwatchdta is STOPPED.\033[0m (v\$v)"
+            printf '%b\n' "\033[1;31m● netwatchdta is STOPPED.\033[0m (v\$v)"
         fi
         systemctl status netwatchdta --no-pager | head -n 5
         ;;
@@ -2170,24 +2162,26 @@ case "\$1" in
         ;;
     edit) 
         echo ""
-        echo -e "\033[1;36m📝 Configuration Editor\033[0m"
+        printf '%b\n' "\033[1;36m📝 Configuration Editor\033[0m"
         while true; do
             echo "1. Edit Settings (settings.conf)"
             echo "2. Edit Device IPs (device_ips.conf)"
             echo "3. Edit Remote IPs (remote_ips.conf)"
-            echo "4. Exit"
-            printf "\033[1mChoice [1-4]: \033[0m"
+            echo "4. Edit Credentials (credentials.conf)"
+            echo "5. Exit"
+            printf "\033[1mChoice [1-5]: \033[0m"
             read choice </dev/tty
             case "\$choice" in
                 1) nano "\$INSTALL_DIR/settings.conf"; break ;;
                 2) nano "\$INSTALL_DIR/device_ips.conf"; break ;;
                 3) nano "\$INSTALL_DIR/remote_ips.conf"; break ;;
-                4) echo "Cancelled."; exit 0 ;;
+                4) nano "\$INSTALL_DIR/credentials.conf"; break ;;
+                5) echo "Cancelled."; exit 0 ;;
                 *) echo "Invalid choice." ;;
             esac
         done
         echo ""
-        echo -e "\033[1;33m⚠️  If you made changes, run: netwatchdta restart\033[0m"
+        printf '%b\n' "\033[1;33m⚠️  If you made changes, run: netwatchdta restart\033[0m"
         ;;
     discord) 
         run_discord_test 
@@ -2203,48 +2197,48 @@ case "\$1" in
         ;;
     purge) 
         echo ""
-        echo -e "\033[1;31m=======================================================\033[0m"
-        echo -e "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
-        echo -e "\033[1;31m=======================================================\033[0m"
+        printf '%b\n' "\033[1;31m=======================================================\033[0m"
+        printf '%b\n' "\033[1;31m🗑️  netwatchdta Smart Uninstaller\033[0m"
+        printf '%b\n' "\033[1;31m=======================================================\033[0m"
         echo ""
-        echo -e "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
-        echo -e "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
-        echo -e "\033[1;37m3.\033[0m Cancel"
+        printf '%b\n' "\033[1;37m1.\033[0m Full Uninstall (Remove everything)"
+        printf '%b\n' "\033[1;37m2.\033[0m Keep Settings (Remove logic but keep config)"
+        printf '%b\n' "\033[1;37m3.\033[0m Cancel"
         printf "\033[1mChoice [1-3]: \033[0m"
         read choice </dev/tty
         
         case "\$choice" in
             1)
                 echo ""
-                echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+                printf '%b\n' "\033[1;33m🛑 Stopping service...\033[0m"
                 systemctl stop netwatchdta
                 systemctl disable netwatchdta
-                echo -e "\033[1;33m🧹 Cleaning up /tmp and files...\033[0m"
+                printf '%b\n' "\033[1;33m🧹 Cleaning up /tmp and files...\033[0m"
                 rm -rf "/tmp/netwatchdta"
                 rm -rf "\$INSTALL_DIR"
-                echo -e "\033[1;33m🔥 Removing service...\033[0m"
+                printf '%b\n' "\033[1;33m🔥 Removing service...\033[0m"
                 rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
                 systemctl daemon-reload
                 echo ""
-                echo -e "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
+                printf '%b\n' "\033[1;32m✅ netwatchdta has been completely removed.\033[0m"
                 ;;
             2)
                 echo ""
-                echo -e "\033[1;33m🛑 Stopping service...\033[0m"
+                printf '%b\n' "\033[1;33m🛑 Stopping service...\033[0m"
                 systemctl stop netwatchdta
                 systemctl disable netwatchdta
-                echo -e "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
+                printf '%b\n' "\033[1;33m🧹 Cleaning up /tmp...\033[0m"
                 rm -rf "/tmp/netwatchdta"
-                echo -e "\033[1;33m🗑️  Removing core script...\033[0m"
-                rm -f "\$INSTALL_DIR/netwatchdta.sh"
-                echo -e "\033[1;33m🔥 Removing service file...\033[0m"
+                printf '%b\n' "\033[1;33m🗑️  Removing core script...\033[0m"
+                rm -f "\$INSTALL_DIR/netwatchdta.sh" "\$INSTALL_DIR/nwdta_common.sh"
+                printf '%b\n' "\033[1;33m🔥 Removing service file...\033[0m"
                 rm -f /etc/systemd/system/netwatchdta.service /usr/local/bin/netwatchdta
                 systemctl daemon-reload
                 echo ""
-                echo -e "\033[1;32m✅ Logic removed. Settings preserved in \$INSTALL_DIR\033[0m"
+                printf '%b\n' "\033[1;32m✅ Logic removed. Settings preserved in \$INSTALL_DIR\033[0m"
                 ;;
             *)
-                echo -e "\033[1;31m❌ Purge cancelled.\033[0m"
+                printf '%b\n' "\033[1;31m❌ Purge cancelled.\033[0m"
                 exit 0
                 ;;
         esac
@@ -2255,7 +2249,7 @@ case "\$1" in
 esac
 EOF
     chmod +x "$CLI_PATH"
-    echo -e "${GREEN}✅ CLI Command installed: 'netwatchdta'${NC}"
+    printf '%b\n' "${GREEN}✅ CLI Command installed: 'netwatchdta'${NC}"
 fi
 
 # ==============================================================================
@@ -2279,25 +2273,25 @@ if [ "$NTFY_ENABLE_VAL" = "YES" ] && [ -n "$NTFY_URL" ]; then
     safe_fetch "$NTFY_URL" "🚀 netwatchdta Service Started - $router_name_input" "Title: 🚀 netwatchdta Started" "Tags: rocket" "Priority: default"
 fi
 
-echo -e "\n${GREEN}=======================================================${NC}"
-echo -e "${BOLD}${GREEN}✅ Installation complete!${NC}"
-echo -e "${CYAN}📂 Folder :${NC} $INSTALL_DIR"
-echo -e "${CYAN}⚙️  Service:${NC} $STATUS"
-echo -e "${GREEN}=======================================================${NC}"
-echo -e "\n${BOLD}Quick Commands:${NC}"
+printf '%b\n' "\n${GREEN}=======================================================${NC}"
+printf '%b\n' "${BOLD}${GREEN}✅ Installation complete!${NC}"
+printf '%b\n' "${CYAN}📂 Folder :${NC} $INSTALL_DIR"
+printf '%b\n' "${CYAN}⚙️  Service:${NC} $STATUS"
+printf '%b\n' "${GREEN}=======================================================${NC}"
+printf '%b\n' "\n${BOLD}Quick Commands:${NC}"
 if [ "$SERVICE_TYPE" = "PROCD" ]; then
-    echo -e "  Status           : ${YELLOW}/etc/init.d/netwatchdta check${NC}"
-    echo -e "  Logs             : ${YELLOW}/etc/init.d/netwatchdta logs${NC}"
-    echo -e "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
-    echo -e "  Edit Settings    : ${YELLOW}/etc/init.d/netwatchdta edit${NC}"
-    echo -e "  Change ntfy/bot  : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
-    echo -e "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
+    printf '%b\n' "  Status           : ${YELLOW}/etc/init.d/netwatchdta check${NC}"
+    printf '%b\n' "  Logs             : ${YELLOW}/etc/init.d/netwatchdta logs${NC}"
+    printf '%b\n' "  Uninstall        : ${RED}/etc/init.d/netwatchdta purge${NC}"
+    printf '%b\n' "  Edit Settings    : ${YELLOW}/etc/init.d/netwatchdta edit${NC}"
+    printf '%b\n' "  Change ntfy/bot  : ${YELLOW}/etc/init.d/netwatchdta credentials${NC}"
+    printf '%b\n' "  Restart          : ${YELLOW}/etc/init.d/netwatchdta restart${NC}"
 else
-    echo -e "  Status           : ${YELLOW}netwatchdta check${NC}"
-    echo -e "  Logs             : ${YELLOW}netwatchdta logs${NC}"
-    echo -e "  Uninstall        : ${RED}netwatchdta purge${NC}"
-    echo -e "  Edit Settings    : ${YELLOW}netwatchdta edit${NC}"
-    echo -e "  Change ntfy/bot  : ${YELLOW}netwatchdta credentials${NC}"
-    echo -e "  Restart          : ${YELLOW}netwatchdta restart${NC}"
+    printf '%b\n' "  Status           : ${YELLOW}netwatchdta check${NC}"
+    printf '%b\n' "  Logs             : ${YELLOW}netwatchdta logs${NC}"
+    printf '%b\n' "  Uninstall        : ${RED}netwatchdta purge${NC}"
+    printf '%b\n' "  Edit Settings    : ${YELLOW}netwatchdta edit${NC}"
+    printf '%b\n' "  Change ntfy/bot  : ${YELLOW}netwatchdta credentials${NC}"
+    printf '%b\n' "  Restart          : ${YELLOW}netwatchdta restart${NC}"
 fi
 echo ""
